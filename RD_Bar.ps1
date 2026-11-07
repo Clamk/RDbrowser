@@ -11,6 +11,7 @@ $psExe      = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
 $appDir     = Join-Path $env:LOCALAPPDATA 'RD_Browser'
 $hotkeyFile = Join-Path $appDir 'hotkey.txt'
 $themeFile  = Join-Path $appDir 'theme.txt'
+$schemeFile = Join-Path $appDir 'scheme.txt'
 $shortcuts  = 'Startup', 'Programs' | ForEach-Object { Join-Path ([Environment]::GetFolderPath($_)) 'RD Browser.lnk' }
 
 function Get-RunArgs($script) { "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -STA -File `"$script`" -SourceDir `"$SourceDir`"" }
@@ -170,64 +171,40 @@ $window = [Windows.Markup.XamlReader]::Parse(@'
     </Style>
   </Window.Resources>
   <Grid x:Name="Root">
-    <Border Margin="24" CornerRadius="12" BorderThickness="1" Background="{DynamicResource Card}" BorderBrush="{DynamicResource CardLine}">
+    <Border Margin="24" CornerRadius="8" BorderThickness="1" Background="{DynamicResource Card}" BorderBrush="{DynamicResource CardLine}">
       <Border.Effect><DropShadowEffect BlurRadius="28" ShadowDepth="6" Opacity="0.35"/></Border.Effect>
       <Grid>
-        <Grid.ColumnDefinitions><ColumnDefinition Width="170"/><ColumnDefinition/></Grid.ColumnDefinitions>
+        <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="180"/></Grid.ColumnDefinitions>
 
-        <!-- Links column: quick links, tool buttons at the bottom -->
-        <Border Background="{DynamicResource Side}" BorderBrush="{DynamicResource Line}" BorderThickness="0,0,1,0" CornerRadius="12,0,0,12">
-          <DockPanel Margin="8,12,8,8">
-            <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,10,0,0">
-              <Border x:Name="ThemeBtn" Style="{StaticResource Tool}"><Path x:Name="ThemeIco" Style="{StaticResource Ico}" Width="18" Height="18"/></Border>
-              <Border x:Name="KeyBtn" Style="{StaticResource Tool}"><Path x:Name="KeyIco" Style="{StaticResource Ico}" Width="18" Height="18"/></Border>
-              <Border x:Name="Cog" Style="{StaticResource Tool}" ToolTip="Ouvrir les fichiers de RD Browser (réglages, scripts)"><Path x:Name="CogIco" Style="{StaticResource Ico}" Width="18" Height="18"/></Border>
-            </StackPanel>
-            <StackPanel>
-              <TextBlock x:Name="LinksTitle" Text="LIENS" FontSize="10.5" FontWeight="SemiBold" Margin="8,2,0,6" Foreground="{DynamicResource Muted}"/>
-              <ItemsControl x:Name="Links">
-                <ItemsControl.ItemTemplate><DataTemplate>
-                  <Border Style="{StaticResource Hover}" Height="32" Margin="0,1" Padding="8,0,6,0" CornerRadius="6" ToolTip="{Binding Tip}">
-                    <DockPanel>
-                      <Path Style="{StaticResource Ico}" Width="15" Height="15" Margin="0,0,8,0" Stroke="{DynamicResource Text}" Data="{Binding Geo}"/>
-                      <Border DockPanel.Dock="Right" Style="{StaticResource Kbd}" CornerRadius="3" Padding="4,0">
-                        <TextBlock Text="{Binding N}" FontSize="10" Foreground="{DynamicResource KbdText}"/>
-                      </Border>
-                      <TextBlock Text="{Binding Name}" FontSize="13" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource Text}"/>
-                    </DockPanel>
-                  </Border>
-                </DataTemplate></ItemsControl.ItemTemplate>
-              </ItemsControl>
-            </StackPanel>
-          </DockPanel>
-        </Border>
-
-        <!-- Search box, RD header, message line, actions (actions share the remaining height) -->
-        <Grid Grid.Column="1">
-          <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition/></Grid.RowDefinitions>
-          <DockPanel Height="58" Margin="18,0">
-            <Path Style="{StaticResource Ico}" Width="20" Height="20" StrokeThickness="2" Data="M17,10 A7,7 0 1 1 3,10 A7,7 0 1 1 17,10 M15,15 L21,21"/>
-            <Border DockPanel.Dock="Right" Style="{StaticResource Kbd}"><TextBlock Text="Échap" FontSize="11" Foreground="{DynamicResource KbdText}"/></Border>
-            <Grid Margin="12,0">
-              <TextBox x:Name="Box" BorderThickness="0" Background="Transparent" FontSize="20" VerticalContentAlignment="Center"
-                       Foreground="{DynamicResource Text}" CaretBrush="{DynamicResource Text}"/>
-              <TextBlock Text="RD000" FontSize="20" Margin="3,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False" Foreground="{DynamicResource Dim}">
-                <TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/>
-                  <Style.Triggers><DataTrigger Binding="{Binding Text, ElementName=Box}" Value=""><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers>
-                </Style></TextBlock.Style>
-              </TextBlock>
-            </Grid>
-          </DockPanel>
-          <Border Grid.Row="1" Height="1" Background="{DynamicResource Line}"/>
-          <StackPanel x:Name="Header" Grid.Row="2" Orientation="Horizontal" Margin="18,12,18,2">
+        <!-- Search box (accent underline), RD header, message line, actions (actions share the remaining height) -->
+        <Grid Margin="14,14,12,10">
+          <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition/></Grid.RowDefinitions>
+          <Grid Height="44">
+            <Border CornerRadius="6" BorderThickness="1" Background="{DynamicResource Box}" BorderBrush="{DynamicResource CardLine}"/>
+            <Border Height="2" VerticalAlignment="Bottom" CornerRadius="0,0,6,6" Background="{DynamicResource Accent}"/>
+            <DockPanel Margin="12,0">
+              <Path Style="{StaticResource Ico}" Width="18" Height="18" Data="M17,10 A7,7 0 1 1 3,10 A7,7 0 1 1 17,10 M15,15 L21,21"/>
+              <Border DockPanel.Dock="Right" Style="{StaticResource Kbd}"><TextBlock Text="Échap" FontSize="11" Foreground="{DynamicResource KbdText}"/></Border>
+              <Grid Margin="10,0">
+                <TextBox x:Name="Box" BorderThickness="0" Background="Transparent" FontSize="18" VerticalContentAlignment="Center"
+                         Foreground="{DynamicResource Text}" CaretBrush="{DynamicResource Text}"/>
+                <TextBlock Text="RD000" FontSize="18" Margin="3,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False" Foreground="{DynamicResource Dim}">
+                  <TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/>
+                    <Style.Triggers><DataTrigger Binding="{Binding Text, ElementName=Box}" Value=""><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers>
+                  </Style></TextBlock.Style>
+                </TextBlock>
+              </Grid>
+            </DockPanel>
+          </Grid>
+          <DockPanel x:Name="Header" Grid.Row="1" Margin="4,12,4,0">
             <TextBlock x:Name="RdName" FontSize="15" FontWeight="Bold"/>
             <TextBlock x:Name="RdPath" FontSize="12" Margin="10,0,0,1" VerticalAlignment="Bottom" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource Muted}"/>
-          </StackPanel>
-          <TextBlock x:Name="Message" Grid.Row="3" Margin="18,8,18,2" FontSize="13" TextWrapping="Wrap"/>
-          <ItemsControl x:Name="Rows" Grid.Row="4" Margin="8,6,8,10">
+          </DockPanel>
+          <TextBlock x:Name="Message" Grid.Row="2" Margin="4,10,4,0" FontSize="13" TextWrapping="Wrap"/>
+          <ItemsControl x:Name="Rows" Grid.Row="3" Margin="0,8,0,0">
             <ItemsControl.ItemsPanel><ItemsPanelTemplate><UniformGrid Columns="1"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
             <ItemsControl.ItemTemplate><DataTemplate>
-              <Border x:Name="R" Height="40" Margin="0,1" Padding="12,0" CornerRadius="8" Background="Transparent" Cursor="Hand">
+              <Border x:Name="R" Height="42" Margin="0,2" Padding="12,0" CornerRadius="6" Background="Transparent" Cursor="Hand">
                 <DockPanel>
                   <Path x:Name="P" Style="{StaticResource Ico}" Width="18" Height="18" Margin="0,0,12,0" Stroke="{DynamicResource Text}" Data="{Binding Geo}"/>
                   <Border x:Name="K" DockPanel.Dock="Right" Style="{StaticResource Kbd}">
@@ -235,21 +212,25 @@ $window = [Windows.Markup.XamlReader]::Parse(@'
                   </Border>
                   <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                     <TextBlock x:Name="T" Text="{Binding Text}" FontSize="14" Foreground="{DynamicResource Text}"/>
-                    <TextBlock Text="{Binding Sub}" FontSize="12" Margin="8,0,0,0" VerticalAlignment="Center" Foreground="{DynamicResource Muted}"/>
+                    <TextBlock x:Name="S" Text="{Binding Sub}" FontSize="12" Margin="8,0,0,0" VerticalAlignment="Center" Foreground="{DynamicResource Muted}"/>
                   </StackPanel>
                 </DockPanel>
               </Border>
               <DataTemplate.Triggers>
+                <Trigger SourceName="R" Property="IsMouseOver" Value="True"><Setter TargetName="R" Property="Background" Value="{DynamicResource Hover}"/></Trigger>
                 <DataTrigger Binding="{Binding Sel}" Value="True">
                   <Setter TargetName="R" Property="Background" Value="{DynamicResource Sel}"/>
                   <Setter TargetName="P" Property="Stroke" Value="{DynamicResource SelText}"/>
                   <Setter TargetName="T" Property="Foreground" Value="{DynamicResource SelText}"/>
                   <Setter TargetName="T" Property="FontWeight" Value="SemiBold"/>
+                  <Setter TargetName="S" Property="Foreground" Value="{DynamicResource SelText}"/>
+                  <Setter TargetName="S" Property="Opacity" Value="0.82"/>
                   <Setter TargetName="K" Property="BorderBrush" Value="{DynamicResource SelKbd}"/>
                   <Setter TargetName="KT" Property="Foreground" Value="{DynamicResource SelText}"/>
                 </DataTrigger>
                 <DataTrigger Binding="{Binding On}" Value="False">
                   <Setter TargetName="R" Property="Cursor" Value="Arrow"/>
+                  <Setter TargetName="R" Property="Background" Value="Transparent"/>
                   <Setter TargetName="P" Property="Stroke" Value="{DynamicResource Dim}"/>
                   <Setter TargetName="T" Property="Foreground" Value="{DynamicResource Dim}"/>
                 </DataTrigger>
@@ -258,12 +239,69 @@ $window = [Windows.Markup.XamlReader]::Parse(@'
             </DataTemplate></ItemsControl.ItemTemplate>
           </ItemsControl>
         </Grid>
+
+        <!-- Links rail: quick links, tool buttons at the bottom, colour picker shown above the tools -->
+        <Border Grid.Column="1" Background="{DynamicResource Side}" BorderBrush="{DynamicResource Line}" BorderThickness="1,0,0,0" CornerRadius="0,8,8,0">
+          <Grid>
+            <DockPanel Margin="8,14,8,8">
+              <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,8,0,0">
+                <Border x:Name="ThemeBtn" Style="{StaticResource Tool}"><Path x:Name="ThemeIco" Style="{StaticResource Ico}" Width="18" Height="18"/></Border>
+                <Border x:Name="PaletteBtn" Style="{StaticResource Tool}" ToolTip="Changer les couleurs"><Path x:Name="PaletteIco" Style="{StaticResource Ico}" Width="18" Height="18"/></Border>
+                <Border x:Name="KeyBtn" Style="{StaticResource Tool}"><Path x:Name="KeyIco" Style="{StaticResource Ico}" Width="18" Height="18"/></Border>
+                <Border x:Name="Cog" Style="{StaticResource Tool}" ToolTip="Ouvrir les fichiers de RD Browser (réglages, scripts)"><Path x:Name="CogIco" Style="{StaticResource Ico}" Width="18" Height="18"/></Border>
+              </StackPanel>
+              <StackPanel>
+                <TextBlock x:Name="LinksTitle" Text="Liens rapides" FontSize="12" FontWeight="SemiBold" Margin="8,0,0,6" Foreground="{DynamicResource Text}"/>
+                <ItemsControl x:Name="Links">
+                  <ItemsControl.ItemTemplate><DataTemplate>
+                    <Border Style="{StaticResource Hover}" Height="32" Margin="0,1" Padding="8,0,6,0" CornerRadius="4" ToolTip="{Binding Tip}">
+                      <DockPanel>
+                        <Path Style="{StaticResource Ico}" Width="15" Height="15" Margin="0,0,8,0" Stroke="{DynamicResource Text}" Data="{Binding Geo}"/>
+                        <Border DockPanel.Dock="Right" Style="{StaticResource Kbd}" CornerRadius="3" Padding="4,0">
+                          <TextBlock Text="{Binding N}" FontSize="10" Foreground="{DynamicResource KbdText}"/>
+                        </Border>
+                        <TextBlock Text="{Binding Name}" FontSize="13" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource Text}"/>
+                      </DockPanel>
+                    </Border>
+                  </DataTemplate></ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </StackPanel>
+            </DockPanel>
+            <Border x:Name="Picker" Visibility="Collapsed" VerticalAlignment="Bottom" Margin="8,0,8,50" Padding="10,8,10,8" CornerRadius="8" BorderThickness="1"
+                    Background="{DynamicResource Box}" BorderBrush="{DynamicResource CardLine}">
+              <Border.Effect><DropShadowEffect BlurRadius="16" ShadowDepth="3" Opacity="0.25"/></Border.Effect>
+              <StackPanel>
+                <DockPanel Margin="0,0,0,6">
+                  <TextBlock Text="Couleurs" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource Muted}"/>
+                  <TextBlock x:Name="SchemeName" FontSize="11" Margin="8,0,0,0" TextAlignment="Right" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource Text}"/>
+                </DockPanel>
+                <ItemsControl x:Name="Swatches">
+                  <ItemsControl.ItemsPanel><ItemsPanelTemplate><UniformGrid Columns="5"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                  <ItemsControl.ItemTemplate><DataTemplate>
+                    <Border x:Name="O" Width="26" Height="26" Margin="0,1" CornerRadius="13" BorderThickness="1" Background="Transparent" Cursor="Hand"
+                            BorderBrush="{DynamicResource CardLine}" ToolTip="{Binding Name}">
+                      <Border CornerRadius="12" BorderThickness="4" Background="{Binding Accent}" BorderBrush="{Binding Surface}" IsHitTestVisible="False"/>
+                    </Border>
+                    <DataTemplate.Triggers>
+                      <Trigger SourceName="O" Property="IsMouseOver" Value="True"><Setter TargetName="O" Property="BorderBrush" Value="{DynamicResource Muted}"/></Trigger>
+                      <DataTrigger Binding="{Binding On}" Value="True">
+                        <Setter TargetName="O" Property="BorderBrush" Value="{DynamicResource Text}"/>
+                        <Setter TargetName="O" Property="BorderThickness" Value="2"/>
+                      </DataTrigger>
+                    </DataTemplate.Triggers>
+                  </DataTemplate></ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </StackPanel>
+            </Border>
+          </Grid>
+        </Border>
       </Grid>
     </Border>
   </Grid>
 </Window>
 '@)
-foreach ($n in 'Box', 'Header', 'RdName', 'RdPath', 'Message', 'Rows', 'Links', 'LinksTitle', 'ThemeBtn', 'ThemeIco', 'KeyBtn', 'Cog') {
+foreach ($n in 'Box', 'Header', 'RdName', 'RdPath', 'Message', 'Rows', 'Links', 'LinksTitle', 'ThemeBtn', 'ThemeIco', 'KeyBtn', 'Cog',
+              'PaletteBtn', 'Picker', 'Swatches', 'SchemeName') {
     Set-Variable $n $window.FindName($n)
 }
 
@@ -278,25 +316,75 @@ $icons = @{}
     moon   = 'M21,12.79 A9,9 0 1 1 11.21,3 A7,7 0 0 0 21,12.79 Z'
     sun    = 'M16,12 A4,4 0 1 1 8,12 A4,4 0 1 1 16,12 Z M12,2 L12,4 M12,20 L12,22 M4.93,4.93 L6.34,6.34 M17.66,17.66 L19.07,19.07 M2,12 L4,12 M20,12 L22,12 M4.93,19.07 L6.34,17.66 M17.66,6.34 L19.07,4.93'
     key    = 'M3,6 L21,6 A1,1 0 0 1 22,7 L22,17 A1,1 0 0 1 21,18 L3,18 A1,1 0 0 1 2,17 L2,7 A1,1 0 0 1 3,6 Z M6,10 L6.01,10 M10,10 L10.01,10 M14,10 L14.01,10 M18,10 L18.01,10 M7,14 L17,14'
+    palette = 'M12,3 A9,9 0 0 0 12,21 C13.1,21 13.8,20.2 13.8,19.2 C13.8,18.7 13.6,18.3 13.3,18 C13,17.7 12.8,17.3 12.8,16.8 C12.8,15.8 13.6,15 14.6,15 L17,15 A4,4 0 0 0 21,11 C21,6.6 17,3 12,3 Z M7.5,11.5 L7.51,11.5 M9.5,7.5 L9.51,7.5 M14.5,7.5 L14.51,7.5 M17,11 L17.01,11'
     cog    = 'M15,12 A3,3 0 1 1 9,12 A3,3 0 1 1 15,12 Z M19.4,15 a1.65,1.65 0 0 0 .33,1.82 l.06,.06 a2,2 0 1 1 -2.83,2.83 l-.06,-.06 a1.65,1.65 0 0 0 -1.82,-.33 a1.65,1.65 0 0 0 -1,1.51 V21 a2,2 0 1 1 -4,0 v-.09 A1.65,1.65 0 0 0 9,19.4 a1.65,1.65 0 0 0 -1.82,.33 l-.06,.06 a2,2 0 1 1 -2.83,-2.83 l.06,-.06 a1.65,1.65 0 0 0 .33,-1.82 a1.65,1.65 0 0 0 -1.51,-1 H3 a2,2 0 1 1 0,-4 h.09 A1.65,1.65 0 0 0 4.6,9 a1.65,1.65 0 0 0 -.33,-1.82 l-.06,-.06 a2,2 0 1 1 2.83,-2.83 l.06,.06 A1.65,1.65 0 0 0 9,4.6 a1.65,1.65 0 0 0 1,-1.51 V3 a2,2 0 1 1 4,0 v.09 a1.65,1.65 0 0 0 1,1.51 a1.65,1.65 0 0 0 1.82,-.33 l.06,-.06 a2,2 0 1 1 2.83,2.83 l-.06,.06 A1.65,1.65 0 0 0 19.4,9 a1.65,1.65 0 0 0 1.51,1 H21 a2,2 0 1 1 0,4 h-.09 a1.65,1.65 0 0 0 -1.51,1 Z'
 }.GetEnumerator() | ForEach-Object { $icons[$_.Key] = [Windows.Media.Geometry]::Parse($_.Value) }
 $window.FindName('KeyIco').Data = $icons.key
 $window.FindName('CogIco').Data = $icons.cog
+$window.FindName('PaletteIco').Data = $icons.palette
 $linkIcons = @{ calculatrice = 'calc'; document = 'doc'; carton = 'box'; tableau = 'sheet'; web = 'globe'; dossier = 'folder' }
 
-# ---------------------------------------------------------------- themes (each PC remembers its choice; first time follows Windows)
-$Themes = @{
-    light = @{ Card = '#FBFBFC'; CardLine = '#D5DAE0'; Side = '#F0F2F5'; Line = '#E4E7EB'; Text = '#1D232A'; Muted = '#5A6672'; Dim = '#8A939C'
-               KbdLine = '#CFD5DC'; KbdText = '#4F5A66'; Hover = '#EEF1F5'; Sel = '#E3EDFB'; SelText = '#0F3D78'; SelKbd = '#A9C3E8'; Error = '#B3261E' }
-    dark  = @{ Card = '#1F242B'; CardLine = '#3A424D'; Side = '#191D23'; Line = '#2E353E'; Text = '#E8EBEF'; Muted = '#A3ADB9'; Dim = '#6E7884'
-               KbdLine = '#46505C'; KbdText = '#AEB8C3'; Hover = '#2B323B'; Sel = '#24364F'; SelText = '#CFE3FF'; SelKbd = '#4C6E9A'; Error = '#FF8A80' }
+# ---------------------------------------------------------------- colours (each PC remembers its mode and scheme; first time follows Windows, scheme Sarcelle)
+# Each scheme: id saved in scheme.txt, name shown in the picker, accent tint of the window surface,
+# then six colours per mode: card, links rail, text, accent, text on accent, error. Everything else is mixed from them.
+function New-Scheme($id, $name, $tint, $light, $dark) { [pscustomobject]@{ Id = $id; Name = $name; Tint = $tint; L = -split $light; D = -split $dark } }
+$Schemes = @(
+    New-Scheme 'bleu'      'Bleu'             0.08 '#FBFBFC #F0F2F5 #1D232A #0B62C4 #FFFFFF #B3261E' '#1F242B #191D23 #E8EBEF #3D84DB #FFFFFF #FF8A80'
+    New-Scheme 'graphite'  'Graphite'         0    '#FAFAFA #EFEFEF #1C1C1C #3A3A3A #FFFFFF #B3261E' '#202020 #1A1A1A #EDEDED #D6D6D6 #141414 #FF8A80'
+    New-Scheme 'ardoise'   'Ardoise'          0.07 '#F8FAFC #EEF2F7 #1E293B #475F8A #FFFFFF #B3261E' '#1B2230 #151B26 #E2E8F0 #8AA4D0 #0E1420 #FF8A80'
+    New-Scheme 'ocean'     'Océan'            0.07 '#F8FBFD #EBF3F8 #12263A #00639B #FFFFFF #B3261E' '#142230 #101B26 #E0ECF5 #4FB3E8 #002236 #FF8A80'
+    New-Scheme 'glacier'   'Glacier'          0.06 '#FBFDFE #EEF6F9 #1B2B33 #13789A #FFFFFF #B3261E' '#172328 #121D21 #E2F1F6 #6FD0EA #032430 #FF8A80'
+    New-Scheme 'sarcelle'  'Sarcelle'         0.07 '#FAFCFC #ECF3F3 #15292A #0E7C7B #FFFFFF #B3261E' '#172324 #121C1D #E3F0EF #3DBAB3 #06201F #FF8A80'
+    New-Scheme 'excel'     'Vert Excel'       0.07 '#FBFCFB #EEF3EF #1B2A20 #217346 #FFFFFF #B3261E' '#1C2420 #161D19 #E5EEE8 #4CAF7A #0A1F12 #FF8A80'
+    New-Scheme 'foret'     'Forêt'            0.07 '#F9FBF7 #EDF2E8 #1F2A1B #3F6B2A #FFFFFF #B3261E' '#1D231A #171C14 #E6EDE1 #8BBE6A #121A0C #FF8A80'
+    New-Scheme 'sauge'     'Sauge'            0.06 '#FAFBF9 #EFF2EE #232B26 #5E7F6B #FFFFFF #B3261E' '#212623 #1A1E1C #E4EAE6 #94B8A2 #142019 #FF8A80'
+    New-Scheme 'sable'     'Sable'            0.07 '#FCFBF8 #F3F0E8 #2B271E #8A6D3B #FFFFFF #B3261E' '#24221C #1D1B16 #EEEADF #D4B27A #241A08 #FF8A80'
+    New-Scheme 'ambre'     'Ambre'            0.07 '#FFFCF7 #F7F1E6 #2A2216 #9A5B00 #FFFFFF #B3261E' '#241F18 #1D1913 #F1EADF #F0A93B #241500 #FF8A80'
+    New-Scheme 'orange'    'Orange sécurité'  0.06 '#FCFBFA #F3F0ED #23201D #C2410C #FFFFFF #9F1239' '#22201E #1B1917 #EEEAE6 #FF8A4C #2A0E00 #FF7A9A'
+    New-Scheme 'brique'    'Brique'           0.06 '#FBFAF9 #F3EFEC #2A1F1B #A63F27 #FFFFFF #9F1239' '#251E1C #1E1816 #F0E6E2 #E87F63 #2A0F07 #FF7A9A'
+    New-Scheme 'bordeaux'  'Bordeaux'         0.06 '#FCFAFA #F4EEEF #2A1B1E #8C1C3A #FFFFFF #B45309' '#261C1F #1F1719 #F1E4E7 #E0708E #2A0A12 #FDBA74'
+    New-Scheme 'rose'      'Rose'             0.06 '#FDFAFB #F7EEF1 #2C1D23 #B8395F #FFFFFF #B45309' '#281D21 #20171B #F3E5EA #F08BAE #2E0B18 #FDBA74'
+    New-Scheme 'prune'     'Prune'            0.07 '#FCFAFC #F3EEF4 #261C29 #7A3E8C #FFFFFF #B3261E' '#241D27 #1D1720 #EEE5F1 #C48ADB #22102B #FF8A80'
+    New-Scheme 'lavande'   'Lavande'          0.07 '#FBFAFE #F1EFF8 #221F33 #6550C8 #FFFFFF #B3261E' '#1F1D2B #191724 #E9E6F5 #A898F2 #17112F #FF8A80'
+    New-Scheme 'indigo'    'Indigo'           0.07 '#F9FAFE #EDEFF9 #1A1D35 #3442A8 #FFFFFF #B3261E' '#1A1D2E #151826 #E3E6F7 #8090F0 #0D1030 #FF8A80'
+    New-Scheme 'moka'      'Moka'             0.06 '#FBF9F8 #F2EDEA #2A211D #6F4E37 #FFFFFF #B3261E' '#241E1B #1D1815 #EFE6E0 #C49A7C #24140A #FF8A80'
+    New-Scheme 'contraste' 'Contraste élevé'  0    '#FFFFFF #F0F0F0 #000000 #0037B3 #FFFFFF #A00000' '#000000 #0D0D0D #FFFFFF #FFD400 #000000 #FF6B6B'
+)
+
+function Get-Mix($a, $b, $t) {   # colour a moved a fraction t of the way to colour b
+    $x = foreach ($i in 1, 3, 5) { [Convert]::ToInt32($a.Substring($i, 2), 16) }
+    $y = foreach ($i in 1, 3, 5) { [Convert]::ToInt32($b.Substring($i, 2), 16) }
+    '#' + (-join (0..2 | ForEach-Object { '{0:X2}' -f [int][math]::Floor($x[$_] + ($y[$_] - $x[$_]) * $t + 0.5) }))
 }
-function Set-Theme($name) {
-    $script:themeName = $name
+
+function Get-Palette($scheme, $mode) {
+    $card, $side, $text, $accent, $onAccent, $err = if ($mode -eq 'dark') { $scheme.D } else { $scheme.L }
+    $tint = if ($mode -eq 'dark' -and $scheme.Tint) { $scheme.Tint + 0.02 } else { $scheme.Tint }
+    [ordered]@{
+        Card = (Get-Mix $card $accent $tint); Box = $card; CardLine = (Get-Mix $card $text 0.16)
+        Side = $side; Line = (Get-Mix $side $text 0.09); Hover = (Get-Mix $side $text 0.06)
+        Text = $text; Muted = (Get-Mix $text $card 0.36); Dim = (Get-Mix $text $card 0.56)
+        KbdLine = (Get-Mix $card $text 0.2); KbdText = (Get-Mix $text $card 0.28)
+        Accent = $accent; Sel = $accent; SelText = $onAccent; SelKbd = (Get-Mix $accent $onAccent 0.45); Error = $err
+    }
+}
+
+function Set-Look {   # applies $themeName (light/dark) and $schemeIdx to the window and the colour picker
     $conv = New-Object Windows.Media.BrushConverter
-    foreach ($c in $Themes[$name].GetEnumerator()) { $window.Resources[$c.Key] = $conv.ConvertFromString($c.Value) }
-    $ThemeIco.Data = $icons[$(if ($name -eq 'dark') { 'sun' } else { 'moon' })]
-    $ThemeBtn.ToolTip = if ($name -eq 'dark') { 'Passer en mode clair' } else { 'Passer en mode sombre' }
+    foreach ($c in (Get-Palette $Schemes[$schemeIdx] $themeName).GetEnumerator()) { $window.Resources[$c.Key] = $conv.ConvertFromString($c.Value) }
+    $ThemeIco.Data = $icons[$(if ($themeName -eq 'dark') { 'sun' } else { 'moon' })]
+    $ThemeBtn.ToolTip = if ($themeName -eq 'dark') { 'Passer en mode clair' } else { 'Passer en mode sombre' }
+    $SchemeName.Text = $Schemes[$schemeIdx].Name
+    $Swatches.ItemsSource = @(for ($i = 0; $i -lt $Schemes.Count; $i++) {
+        $p = Get-Palette $Schemes[$i] $themeName
+        [pscustomobject]@{ I = $i; Name = $Schemes[$i].Name; Accent = $conv.ConvertFromString($p.Accent); Surface = $conv.ConvertFromString($p.Card); On = ($i -eq $schemeIdx) }
+    })
+}
+
+function Show-Picker([bool]$open) {
+    $Picker.Visibility = if ($open) { 'Visible' } else { 'Collapsed' }
+    if ($open) { $PaletteBtn.SetResourceReference([Windows.Controls.Border]::BackgroundProperty, 'Hover') }
+    else { $PaletteBtn.ClearValue([Windows.Controls.Border]::BackgroundProperty) }
 }
 function Save-Pref($file, $value) { try { $null = New-Item -ItemType Directory -Force $appDir; Set-Content -LiteralPath $file $value -Encoding ASCII } catch { } }
 
@@ -380,6 +468,7 @@ function Build-Links {
 # ---------------------------------------------------------------- actions
 function Hide-Bar {
     if ($S.Capture) { Complete-Capture '' }
+    Show-Picker $false
     if ($S.Visible) { $S.Visible = $false; $window.Hide() }
 }
 
@@ -453,7 +542,16 @@ $Rows.Add_MouseLeftButtonUp({ param($src, $e) $d = $e.OriginalSource.DataContext
 $Links.Add_MouseLeftButtonUp({ param($src, $e) $d = $e.OriginalSource.DataContext; if ($d.Path) { Open-Target $d.Path } })
 $Cog.Add_MouseLeftButtonUp({ Open-AppFiles })
 $KeyBtn.Add_MouseLeftButtonUp({ if ($S.Capture) { Complete-Capture ''; Render } else { Start-Capture } })
-$ThemeBtn.Add_MouseLeftButtonUp({ $t = if ($themeName -eq 'dark') { 'light' } else { 'dark' }; Set-Theme $t; Save-Pref $themeFile $t })
+$ThemeBtn.Add_MouseLeftButtonUp({ $script:themeName = if ($themeName -eq 'dark') { 'light' } else { 'dark' }; Set-Look; Save-Pref $themeFile $themeName })
+$PaletteBtn.Add_MouseLeftButtonUp({ Show-Picker ($Picker.Visibility -ne 'Visible') })
+$Swatches.Add_MouseLeftButtonUp({
+    param($src, $e)
+    $d = $e.OriginalSource.DataContext
+    if ($null -eq $d.I) { return }
+    $script:schemeIdx = $d.I
+    Set-Look
+    Save-Pref $schemeFile $Schemes[$d.I].Id
+})
 $window.Add_Deactivated({ Hide-Bar })   # clicking elsewhere hides the bar, like the Start menu
 $window.Add_Closing({ param($src, $e) if (-not $S.Quitting) { $e.Cancel = $true; Hide-Bar } })   # Alt+F4 hides
 
@@ -472,6 +570,7 @@ $window.Add_PreviewKeyDown({
         return Complete-Capture (($parts + ($key -replace '^D(\d)$', '$1')) -join '+')
     }
 
+    if ($key -eq 'Escape' -and $Picker.Visibility -eq 'Visible') { return Show-Picker $false }
     switch ($key) {
         'Escape' { if ($S.Pick) { $S.Pick = $null; $S.Sel = (@(Get-Live) + -1)[0]; Render } else { Hide-Bar }; return }
         'Down'   { return Move-Sel 1 }
@@ -493,19 +592,31 @@ $window.Add_PreviewKeyDown({
 })
 
 $saved = Get-Content -LiteralPath $themeFile -EA 0 | Select-Object -First 1
-Set-Theme $(if ($saved -in 'dark', 'light') { $saved }
-            elseif ((Get-ItemPropertyValue 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize' AppsUseLightTheme -EA 0) -eq 0) { 'dark' }
-            else { 'light' })
+$themeName = if ($saved -in 'dark', 'light') { $saved }
+             elseif ((Get-ItemPropertyValue 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize' AppsUseLightTheme -EA 0) -eq 0) { 'dark' }
+             else { 'light' }
+$savedScheme = "$(Get-Content -LiteralPath $schemeFile -EA 0 | Select-Object -First 1)".Trim()
+$schemeIdx = [array]::IndexOf(@($Schemes.Id), $savedScheme)
+if ($schemeIdx -lt 0) { $schemeIdx = [array]::IndexOf(@($Schemes.Id), 'sarcelle') }   # default scheme
+Set-Look
 
 # ---------------------------------------------------------------- tray icon and menu
 [Windows.Forms.Application]::EnableVisualStyles()
+# icon: R and D stacked diagonally on a rounded square in the Sarcelle accent
 $bmp = New-Object Drawing.Bitmap 32, 32
 $g = [Drawing.Graphics]::FromImage($bmp)
+$g.SmoothingMode = 'AntiAlias'
 $g.TextRenderingHint = 'AntiAliasGridFit'
-$g.Clear([Drawing.Color]::FromArgb(11, 98, 196))
+$square = New-Object Drawing.Drawing2D.GraphicsPath
+$square.AddArc(1, 1, 14, 14, 180, 90); $square.AddArc(17, 1, 14, 14, 270, 90)
+$square.AddArc(17, 17, 14, 14, 0, 90); $square.AddArc(1, 17, 14, 14, 90, 90)
+$square.CloseFigure()
+$g.FillPath((New-Object Drawing.SolidBrush ([Drawing.ColorTranslator]::FromHtml(($Schemes | Where-Object Id -eq 'sarcelle').L[3]))), $square)
 $fmt = New-Object Drawing.StringFormat
 $fmt.Alignment = $fmt.LineAlignment = 'Center'
-$g.DrawString('RD', (New-Object Drawing.Font('Segoe UI', 15, 'Bold', 'Pixel')), [Drawing.Brushes]::White, (New-Object Drawing.RectangleF(0, 1, 32, 32)), $fmt)
+$font = New-Object Drawing.Font('Segoe UI', 14, 'Bold', 'Pixel')
+$g.DrawString('R', $font, [Drawing.Brushes]::White, (New-Object Drawing.RectangleF(1, 1.5, 20, 20)), $fmt)
+$g.DrawString('D', $font, [Drawing.Brushes]::White, (New-Object Drawing.RectangleF(10.5, 11, 20, 20)), $fmt)
 $g.Dispose()
 
 $menu = New-Object Windows.Forms.ContextMenuStrip
