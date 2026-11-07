@@ -1,0 +1,50 @@
+{
+  "RootPath_AIDE": [
+    "RootPath : l'endroit où se trouvent les dossiers RD001, RD002, etc.",
+    "  ..                         = le dossier juste au-dessus de ce dossier RD Browser (réglage actuel)",
+    "  \\\\serveur\\partage\\RD    = un chemin complet (chaque \\ tapée deux fois)",
+    "Hotkey : le raccourci clavier par défaut pour tout le monde (pris en compte au prochain démarrage).",
+    "         Chacun peut le changer pour son propre PC avec le bouton clavier, en bas à gauche de la barre."
+  ],
+  "RootPath": "..",
+  "Hotkey": "Ctrl+Alt+F",
+
+  "QuickLinks_AIDE": [
+    "LIENS RAPIDES = les 6 boutons AU-DESSUS de la barre de recherche. Ils ouvrent toujours le même endroit, quel que soit le numéro de RD tapé.",
+    "Name : le texte affiché sur le bouton. Restez court (environ 12 caractères).",
+    "Path : ce que le bouton ouvre - un dossier, un fichier ou une adresse web.",
+    "       Exemple dossier : D:\\Projets\\Modeles",
+    "       Exemple réseau  : \\\\serveur\\partage\\Documents",
+    "       Exemple web     : https://intranet.exemple.fr",
+    "       IMPORTANT : chaque barre oblique inverse \\ doit être tapée deux fois, exactement comme dans les exemples.",
+    "Laissez Path vide (deux guillemets, rien entre les deux) : le lien reste caché jusqu'à ce qu'il ait une adresse.",
+    "Icon : (facultatif) dossier, web, document, tableau, carton ou calculatrice.",
+    "       Sans Icon : un globe pour les adresses web, un dossier pour le reste.",
+    "Clavier : Alt+1 à Alt+6 ouvrent les liens 1 à 6."
+  ],
+  "QuickLinks": [
+    { "Name": "Dossiers RD", "Path": "D:\\Github\\Testing place" },
+    { "Name": "Stocks",       "Path": "D:\\A_DEFINIR\\Stocks",   "Icon": "carton" },
+    { "Name": "Cellules",     "Path": "D:\\A_DEFINIR\\Cellules", "Icon": "tableau" },
+    { "Name": "Calculateur",  "Path": "https://clamk-tools.github.io/Converter/", "Icon": "calculatrice" },
+    { "Name": "Lien 5",      "Path": "" },
+    { "Name": "Lien 6",      "Path": "" }
+  ],
+
+  "Buttons_AIDE": [
+    "BOUTONS = les lignes d'action SOUS la barre de recherche. Elles agissent sur le numéro de RD tapé.",
+    "Label : le nom affiché.",
+    "Type folder : ouvre le dossier du RD.",
+    "Type file   : ouvre le fichier du dossier RD dont le nom contient Pattern (majuscules ou minuscules).",
+    "Type none   : pas encore configuré, affiché en grisé.",
+    "Shortcut    : (facultatif) une lettre pour le raccourci Ctrl+lettre."
+  ],
+  "Buttons": [
+    { "Label": "Dossier",  "Type": "folder" },
+    { "Label": "Manip",    "Type": "file", "Pattern": "manip", "Extensions": [".xlsx", ".xlsm", ".xls"], "Shortcut": "M" },
+    { "Label": "Bouton 3", "Type": "none" },
+    { "Label": "Bouton 4", "Type": "none" },
+    { "Label": "Bouton 5", "Type": "none" },
+    { "Label": "Bouton 6", "Type": "none" }
+  ]
+}
