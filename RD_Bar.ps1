@@ -1,7 +1,8 @@
 ﻿# RD Bar - lanceur RD au clavier, près de l'horloge.
 #   Setup.cmd / Uninstall.cmd : installe (copie locale + démarrage à la connexion) / désinstalle.
 #   Raccourci global (Hotkey du fichier de réglages, ou celui choisi sur ce PC) : ouvre la barre.
-#   Entrée = action surlignée, Haut/Bas = déplacer, Ctrl+lettre/chiffre = actions, Alt+1..6 = liens, Échap = masquer.
+#   Entrée = action surlignée, Haut/Bas = déplacer, Ctrl+lettre/chiffre = actions, Alt+1..6 = liens, Alt+7..0 = mes liens, Échap = masquer.
+#   Mes liens : chacun ajoute ses propres liens avec « Ajouter un lien » (enregistrés sur ce PC, dans mes_liens.json).
 #   Réglages : RD_Browser.config.json (relu à chaque ouverture). Mise à jour : copie partagée adoptée au démarrage si elle est valide.
 param([switch]$Install, [switch]$Uninstall, [string]$SourceDir, [switch]$Welcome)
 
@@ -12,6 +13,7 @@ $appDir     = Join-Path $env:LOCALAPPDATA 'RD_Browser'
 $hotkeyFile = Join-Path $appDir 'hotkey.txt'
 $themeFile  = Join-Path $appDir 'theme.txt'
 $schemeFile = Join-Path $appDir 'scheme.txt'
+$myLinksFile = Join-Path $appDir 'mes_liens.json'   # this person's own links ("Mes liens"), on this PC only
 $shortcuts  = 'Startup', 'Programs' | ForEach-Object { Join-Path ([Environment]::GetFolderPath($_)) 'RD Browser.lnk' }
 
 function Get-RunArgs($script) { "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -STA -File `"$script`" -SourceDir `"$SourceDir`"" }
@@ -128,6 +130,54 @@ public class RdHotkey : NativeWindow, IDisposable {
 }
 '@
 
+# Standard Windows browse window (same as Explorer, with an address bar for \\server paths), for a file or a folder
+Add-Type -TypeDefinition @'
+using System; using System.Runtime.InteropServices;
+public static class RdPicker {
+    [ComImport, Guid("DC1C5A9C-E88A-4dde-A5A1-60F82A20AEF7")] class FileOpenDialog { }
+    [ComImport, Guid("42f85136-db7e-439c-85f1-e4075d135fc8"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    interface IFileDialog {
+        [PreserveSig] int Show(IntPtr parent);
+        void SetFileTypes(uint count, IntPtr specs);
+        void SetFileTypeIndex(uint index);
+        void GetFileTypeIndex(out uint index);
+        void Advise(IntPtr events, out uint cookie);
+        void Unadvise(uint cookie);
+        void SetOptions(uint options);
+        void GetOptions(out uint options);
+        void SetDefaultFolder(IShellItem item);
+        void SetFolder(IShellItem item);
+        void GetFolder(out IShellItem item);
+        void GetCurrentSelection(out IShellItem item);
+        void SetFileName([MarshalAs(UnmanagedType.LPWStr)] string name);
+        void GetFileName([MarshalAs(UnmanagedType.LPWStr)] out string name);
+        void SetTitle([MarshalAs(UnmanagedType.LPWStr)] string title);
+        void SetOkButtonLabel([MarshalAs(UnmanagedType.LPWStr)] string label);
+        void SetFileNameLabel([MarshalAs(UnmanagedType.LPWStr)] string label);
+        void GetResult(out IShellItem item);
+    }
+    [ComImport, Guid("43826D1E-E718-42EE-BC55-A1E261C37BFE"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    interface IShellItem {
+        void BindToHandler(IntPtr bc, ref Guid handler, ref Guid iid, out IntPtr result);
+        void GetParent(out IShellItem parent);
+        void GetDisplayName(uint kind, [MarshalAs(UnmanagedType.LPWStr)] out string name);
+    }
+    // Returns the chosen path, or null if cancelled
+    public static string Pick(IntPtr owner, bool folder, string title) {
+        IFileDialog d = (IFileDialog)new FileOpenDialog();
+        try {
+            uint o; d.GetOptions(out o);
+            d.SetOptions(o | 0x40u | 0x800u | 0x1000u | (folder ? 0x20u : 0u));   // real paths only, must exist, folders if asked
+            d.SetTitle(title);
+            if (d.Show(owner) != 0) return null;
+            IShellItem item; d.GetResult(out item);
+            string path; item.GetDisplayName(0x80058000u, out path);
+            return path;
+        } finally { Marshal.ReleaseComObject(d); }
+    }
+}
+'@
+
 # Returns the registered shortcut, or nothing if the text is invalid or another program already uses it
 function Register-Hotkey($text) {
     $mods = 0; $vk = 0
@@ -169,6 +219,21 @@ $window = [Windows.Markup.XamlReader]::Parse(@'
       <Setter Property="BorderBrush" Value="{DynamicResource KbdLine}"/><Setter Property="BorderThickness" Value="1"/>
       <Setter Property="CornerRadius" Value="4"/><Setter Property="Padding" Value="6,1"/><Setter Property="VerticalAlignment" Value="Center"/>
     </Style>
+    <!-- One line of the links rail (shared links and "Mes liens"); the Alt number badge is hidden when there is none -->
+    <DataTemplate x:Key="LinkTpl">
+      <Border Style="{StaticResource Hover}" Height="32" Margin="0,1" Padding="8,0,6,0" CornerRadius="4" ToolTip="{Binding Tip}">
+        <DockPanel>
+          <Path Style="{StaticResource Ico}" Width="15" Height="15" Margin="0,0,8,0" Stroke="{DynamicResource Text}" Data="{Binding Geo}"/>
+          <Border x:Name="K" DockPanel.Dock="Right" Style="{StaticResource Kbd}" CornerRadius="3" Padding="4,0">
+            <TextBlock Text="{Binding N}" FontSize="10" Foreground="{DynamicResource KbdText}"/>
+          </Border>
+          <TextBlock Text="{Binding Name}" FontSize="13" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource Text}"/>
+        </DockPanel>
+      </Border>
+      <DataTemplate.Triggers>
+        <DataTrigger Binding="{Binding N}" Value=""><Setter TargetName="K" Property="Visibility" Value="Collapsed"/></DataTrigger>
+      </DataTemplate.Triggers>
+    </DataTemplate>
   </Window.Resources>
   <Grid x:Name="Root">
     <Border Margin="24" CornerRadius="8" BorderThickness="1" Background="{DynamicResource Card}" BorderBrush="{DynamicResource CardLine}">
@@ -252,19 +317,16 @@ $window = [Windows.Markup.XamlReader]::Parse(@'
               </StackPanel>
               <StackPanel>
                 <TextBlock x:Name="LinksTitle" Text="Liens rapides" FontSize="12" FontWeight="SemiBold" Margin="8,0,0,6" Foreground="{DynamicResource Text}"/>
-                <ItemsControl x:Name="Links">
-                  <ItemsControl.ItemTemplate><DataTemplate>
-                    <Border Style="{StaticResource Hover}" Height="32" Margin="0,1" Padding="8,0,6,0" CornerRadius="4" ToolTip="{Binding Tip}">
-                      <DockPanel>
-                        <Path Style="{StaticResource Ico}" Width="15" Height="15" Margin="0,0,8,0" Stroke="{DynamicResource Text}" Data="{Binding Geo}"/>
-                        <Border DockPanel.Dock="Right" Style="{StaticResource Kbd}" CornerRadius="3" Padding="4,0">
-                          <TextBlock Text="{Binding N}" FontSize="10" Foreground="{DynamicResource KbdText}"/>
-                        </Border>
-                        <TextBlock Text="{Binding Name}" FontSize="13" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource Text}"/>
-                      </DockPanel>
-                    </Border>
-                  </DataTemplate></ItemsControl.ItemTemplate>
-                </ItemsControl>
+                <ItemsControl x:Name="Links" ItemTemplate="{StaticResource LinkTpl}"/>
+                <TextBlock Text="Mes liens" FontSize="12" FontWeight="SemiBold" Margin="8,12,0,6" Foreground="{DynamicResource Text}"/>
+                <ItemsControl x:Name="MyLinks" ItemTemplate="{StaticResource LinkTpl}"/>
+                <Border x:Name="AddLink" Style="{StaticResource Hover}" Height="32" Margin="0,1" Padding="8,0,6,0" CornerRadius="4"
+                        ToolTip="Ajouter votre propre lien vers un dossier ou un fichier (visible seulement par vous, sur ce PC)">
+                  <DockPanel>
+                    <Path Style="{StaticResource Ico}" Width="15" Height="15" Margin="0,0,8,0" Data="M12,5 L12,19 M5,12 L19,12"/>
+                    <TextBlock Text="Ajouter un lien" FontSize="13" VerticalAlignment="Center" Foreground="{DynamicResource Muted}"/>
+                  </DockPanel>
+                </Border>
               </StackPanel>
             </DockPanel>
             <Border x:Name="Picker" Visibility="Collapsed" VerticalAlignment="Bottom" Margin="8,0,8,50" Padding="10,8,10,8" CornerRadius="8" BorderThickness="1"
@@ -300,7 +362,7 @@ $window = [Windows.Markup.XamlReader]::Parse(@'
   </Grid>
 </Window>
 '@)
-foreach ($n in 'Box', 'Header', 'RdName', 'RdPath', 'Message', 'Rows', 'Links', 'LinksTitle', 'ThemeBtn', 'ThemeIco', 'KeyBtn', 'Cog',
+foreach ($n in 'Box', 'Header', 'RdName', 'RdPath', 'Message', 'Rows', 'Links', 'LinksTitle', 'MyLinks', 'AddLink', 'ThemeBtn', 'ThemeIco', 'KeyBtn', 'Cog',
               'PaletteBtn', 'Picker', 'Swatches', 'SchemeName') {
     Set-Variable $n $window.FindName($n)
 }
@@ -389,7 +451,7 @@ function Show-Picker([bool]$open) {
 function Save-Pref($file, $value) { try { $null = New-Item -ItemType Directory -Force $appDir; Set-Content -LiteralPath $file $value -Encoding ASCII } catch { } }
 
 # ---------------------------------------------------------------- state and rendering
-$S = @{ Sel = -1; Rd = $null; Folder = $null; Matches = @{}; Pick = $null; PickLabel = ''; Visible = $false; Quitting = $false; Capture = $false }
+$S = @{ Sel = -1; Rd = $null; Folder = $null; Matches = @{}; Pick = $null; PickLabel = ''; Visible = $false; Quitting = $false; Capture = $false; Dialog = $false }
 $fg = [Windows.Controls.TextBlock]::ForegroundProperty
 
 function Set-Message($text, [switch]$IsError) {
@@ -465,6 +527,144 @@ function Build-Links {
     $LinksTitle.Visibility = if ($Links.Items.Count) { 'Visible' } else { 'Collapsed' }
 }
 
+# ---------------------------------------------------------------- "Mes liens": each person's own links, saved on this PC only
+# Up to 6; Alt+7, 8, 9, 0 open the first 4. Kind (folder/file) is stored so the bar never has to check the network to draw them.
+$myMax  = 6
+$myKeys = '7', '8', '9', '0'
+$myList = @()
+
+function Read-MyLinks {
+    $json = $null
+    try { $json = Get-Content -LiteralPath $myLinksFile -Raw -Encoding UTF8 -EA Stop | ConvertFrom-Json } catch { }
+    $list = foreach ($l in $json) {
+        if ("$($l.Path)".Trim()) { [pscustomobject]@{ Name = "$($l.Name)"; Path = "$($l.Path)"; Kind = "$($l.Kind)" } }
+    }
+    $script:myList = @($list | Select-Object -First $myMax)
+}
+
+function Save-MyLinks {
+    try {
+        $null = New-Item -ItemType Directory -Force $appDir
+        ConvertTo-Json -InputObject @($myList) | Set-Content -LiteralPath $myLinksFile -Encoding UTF8 -EA Stop
+    } catch { Set-Message "Impossible d'enregistrer vos liens - $($_.Exception.Message)" -IsError }
+    Build-MyLinks
+}
+
+function Build-MyLinks {
+    $MyLinks.ItemsSource = @(for ($i = 0; $i -lt $myList.Count; $i++) {
+        $l = $myList[$i]
+        $n = if ($i -lt $myKeys.Count) { $myKeys[$i] } else { '' }
+        $ico = if ($l.Kind -eq 'folder') { 'folder' } elseif ([IO.Path]::GetExtension($l.Path) -match '^\.(xls|xlsx|xlsm|csv)$') { 'sheet' } else { 'doc' }
+        $tip = $l.Path + $(if ($n) { "   (Alt+$n)" }) + "`nClic droit : renommer, déplacer, supprimer"
+        [pscustomobject]@{ I = $i; N = $n; Name = $l.Name; Path = $l.Path; Tip = $tip; Geo = $icons[$ico] }
+    })
+    $AddLink.Visibility = if ($myList.Count -lt $myMax) { 'Visible' } else { 'Collapsed' }
+}
+
+# Runs a window that takes the focus (browse, rename) without the bar hiding itself meanwhile; returns what the block returns
+function Invoke-Modal([scriptblock]$block) {
+    $S.Dialog = $true
+    try { & $block }
+    finally {
+        $S.Dialog = $false
+        if ($S.Visible) { [void]$window.Activate(); [void]$Box.Focus() }
+    }
+}
+
+function Add-MyLink([bool]$folder) {
+    $title = if ($folder) { 'Choisir un dossier pour Mes liens' } else { 'Choisir un fichier pour Mes liens' }
+    $owner = (New-Object Windows.Interop.WindowInteropHelper $window).Handle
+    $path = $null
+    try { $path = Invoke-Modal { [RdPicker]::Pick($owner, $folder, $title) } }
+    catch { return Set-Message "Impossible d'ouvrir la fenêtre de choix - $($_.Exception.Message)" -IsError }
+    if (-not $path) { return }   # cancelled
+    $name = if ($folder) { Split-Path $path -Leaf } else { [IO.Path]::GetFileNameWithoutExtension($path) }
+    if (-not $name) { $name = $path }   # e.g. a whole drive
+    $script:myList = @($myList) + [pscustomobject]@{ Name = $name; Path = $path; Kind = $(if ($folder) { 'folder' } else { 'file' }) }
+    Save-MyLinks
+    Set-Message "Lien ajouté : $name. Clic droit dessus pour le renommer, le déplacer ou le supprimer."
+}
+
+function Read-NewName($current) {   # small box above the bar; returns the new name, or nothing if cancelled
+    $dlg = [Windows.Markup.XamlReader]::Parse(@'
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        WindowStyle="None" AllowsTransparency="True" Background="Transparent" SizeToContent="WidthAndHeight" ResizeMode="NoResize"
+        ShowInTaskbar="False" WindowStartupLocation="CenterOwner" FontFamily="Segoe UI">
+  <Border Margin="16" Padding="16,12" CornerRadius="8" BorderThickness="1" Background="{DynamicResource Box}" BorderBrush="{DynamicResource CardLine}">
+    <Border.Effect><DropShadowEffect BlurRadius="16" ShadowDepth="3" Opacity="0.25"/></Border.Effect>
+    <StackPanel Width="300">
+      <TextBlock Text="Renommer le lien" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource Text}"/>
+      <TextBox x:Name="NameBox" Margin="0,8,0,0" Padding="4,3" FontSize="14"/>
+      <TextBlock Text="Entrée = valider · Échap = annuler" FontSize="11" Margin="0,6,0,0" Foreground="{DynamicResource Muted}"/>
+    </StackPanel>
+  </Border>
+</Window>
+'@)
+    $dlg.Resources.MergedDictionaries.Add($window.Resources)   # same colours as the bar
+    $dlg.Owner = $window
+    $nameBox = $dlg.FindName('NameBox')
+    $nameBox.Text = $current
+    $dlg.Add_ContentRendered({ [void]$nameBox.Focus(); $nameBox.SelectAll() })
+    $dlg.Add_PreviewKeyDown({
+        param($src, $e)
+        if ($e.Key -eq 'Return') { $e.Handled = $true; $dlg.DialogResult = $true }
+        elseif ($e.Key -eq 'Escape') { $e.Handled = $true; $dlg.DialogResult = $false }
+    })
+    if ($dlg.ShowDialog() -and $nameBox.Text.Trim()) { $nameBox.Text.Trim() }
+}
+
+function Edit-MyLink($action) {   # acts on the link that was right-clicked ($S.EditIdx)
+    $i = $S.EditIdx
+    $list = [Collections.ArrayList]@($myList)
+    if ($i -lt 0 -or $i -ge $list.Count) { return }
+    switch ($action) {
+        'rename' {
+            $new = Invoke-Modal { Read-NewName $list[$i].Name }
+            if (-not $new) { return }
+            $list[$i] = [pscustomobject]@{ Name = $new; Path = $list[$i].Path; Kind = $list[$i].Kind }
+        }
+        'up'     { if ($i -gt 0) { $list[$i], $list[$i - 1] = $list[$i - 1], $list[$i] } }
+        'down'   { if ($i -lt $list.Count - 1) { $list[$i], $list[$i + 1] = $list[$i + 1], $list[$i] } }
+        'remove' { $list.RemoveAt($i) }
+    }
+    $script:myList = @($list)
+    Save-MyLinks
+}
+
+# Menus: "Ajouter un lien" (folder or file) and right-click on one of "Mes liens"
+function New-Menu($items) {   # each item: label, action
+    $menu = New-Object Windows.Controls.ContextMenu
+    foreach ($it in $items) {
+        $mi = New-Object Windows.Controls.MenuItem
+        $mi.Header = $it[0]
+        $mi.Add_Click($it[1])
+        [void]$menu.Items.Add($mi)
+    }
+    # if the person clicked away from the bar while the menu was open, hide the bar as usual
+    $menu.Add_Closed({
+        [void]$window.Dispatcher.BeginInvoke([Windows.Threading.DispatcherPriority]::ApplicationIdle,
+            [Action]{ if ($S.Visible -and -not $window.IsActive -and -not $S.Dialog) { Hide-Bar } })
+    })
+    $menu
+}
+
+function Show-Menu($menu, $target) {
+    $menu.PlacementTarget = $target
+    $menu.Placement = 'MousePoint'
+    $menu.IsOpen = $true
+}
+
+$addMenu = New-Menu @(
+    , @('Ajouter un dossier…', { Add-MyLink $true })
+    , @('Ajouter un fichier…', { Add-MyLink $false })
+)
+$editMenu = New-Menu @(
+    , @('Renommer…', { Edit-MyLink 'rename' })
+    , @('Monter',    { Edit-MyLink 'up' })
+    , @('Descendre', { Edit-MyLink 'down' })
+    , @('Supprimer', { Edit-MyLink 'remove' })
+)
+
 # ---------------------------------------------------------------- actions
 function Hide-Bar {
     if ($S.Capture) { Complete-Capture '' }
@@ -476,6 +676,8 @@ function Show-Bar {
     if (-not $S.Visible) {
         Read-Config
         Build-Links
+        Read-MyLinks
+        Build-MyLinks
         if ($Box.Text) { $Box.Text = '' } else { Update-FromInput }
         $area = [Windows.SystemParameters]::WorkArea
         $window.Left = $area.Left + ($area.Width - $window.Width) / 2
@@ -540,6 +742,18 @@ function Complete-Capture($candidate, [switch]$Reset) {
 $Box.Add_TextChanged({ Update-FromInput })
 $Rows.Add_MouseLeftButtonUp({ param($src, $e) $d = $e.OriginalSource.DataContext; if ($d.On) { Invoke-Row $d.I } })
 $Links.Add_MouseLeftButtonUp({ param($src, $e) $d = $e.OriginalSource.DataContext; if ($d.Path) { Open-Target $d.Path } })
+$MyLinks.Add_MouseLeftButtonUp({ param($src, $e) $d = $e.OriginalSource.DataContext; if ($d.Path) { Open-Target $d.Path } })
+$MyLinks.Add_MouseRightButtonUp({
+    param($src, $e)
+    $d = $e.OriginalSource.DataContext
+    if ($null -eq $d.I) { return }
+    $e.Handled = $true
+    $S.EditIdx = $d.I
+    $editMenu.Items[1].IsEnabled = $d.I -gt 0                       # Monter
+    $editMenu.Items[2].IsEnabled = $d.I -lt $myList.Count - 1      # Descendre
+    Show-Menu $editMenu $MyLinks
+})
+$AddLink.Add_MouseLeftButtonUp({ Show-Menu $addMenu $AddLink })
 $Cog.Add_MouseLeftButtonUp({ Open-AppFiles })
 $KeyBtn.Add_MouseLeftButtonUp({ if ($S.Capture) { Complete-Capture ''; Render } else { Start-Capture } })
 $ThemeBtn.Add_MouseLeftButtonUp({ $script:themeName = if ($themeName -eq 'dark') { 'light' } else { 'dark' }; Set-Look; Save-Pref $themeFile $themeName })
@@ -552,7 +766,9 @@ $Swatches.Add_MouseLeftButtonUp({
     Set-Look
     Save-Pref $schemeFile $Schemes[$d.I].Id
 })
-$window.Add_Deactivated({ Hide-Bar })   # clicking elsewhere hides the bar, like the Start menu
+$window.Add_Deactivated({   # clicking elsewhere hides the bar, like the Start menu (not while one of its own windows or menus is open)
+    if (-not ($S.Dialog -or $addMenu.IsOpen -or $editMenu.IsOpen)) { Hide-Bar }
+})
 $window.Add_Closing({ param($src, $e) if (-not $S.Quitting) { $e.Cancel = $true; Hide-Bar } })   # Alt+F4 hides
 
 $window.Add_PreviewKeyDown({
@@ -578,9 +794,11 @@ $window.Add_PreviewKeyDown({
         'Return' { if ($S.Sel -ge 0) { Invoke-Row $S.Sel }; return }
     }
     $digit = if ($key -match '^(D|NumPad)(\d)$') { [int]$Matches[2] }
-    if ($digit -and $mods -eq 'Alt') {
+    if ($null -ne $digit -and $mods -eq 'Alt') {   # Alt+1..6 = shared links, Alt+7 8 9 0 = the first 4 of "Mes liens"
         $ql = @($config.QuickLinks)
-        if ($digit -le $ql.Count -and "$($ql[$digit - 1].Path)".Trim()) { Open-Target $ql[$digit - 1].Path }
+        $mine = [array]::IndexOf($myKeys, "$digit")
+        if ($mine -ge 0) { if ($mine -lt $myList.Count) { Open-Target $myList[$mine].Path } }
+        elseif ($digit -le $ql.Count -and "$($ql[$digit - 1].Path)".Trim()) { Open-Target $ql[$digit - 1].Path }
         return
     }
     if ($mods -eq 'Control' -and -not $S.Pick) {
