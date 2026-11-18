@@ -44,18 +44,19 @@
   ],
 
   "Buttons_AIDE": [
-    "BOUTONS = les lignes d'action SOUS la barre de recherche. Elles agissent sur le numéro de RD tapé.",
+    "BOUTONS = les tuiles d'action SOUS la barre de recherche (une rangée, au-dessus de la liste des fichiers du dossier). Elles agissent sur le dossier trouvé (RD ou projet).",
     "Label : le nom affiché.",
     "Type folder : ouvre le dossier du RD.",
-    "Type file   : ouvre le fichier du dossier RD dont le nom contient Pattern (majuscules ou minuscules).",
-    "Type none   : pas encore configuré, affiché en grisé.",
+    "Type file   : ouvre le fichier du dossier dont le nom contient Pattern (majuscules ou minuscules ; espaces, _ et - ignorés : « rapport final » trouve aussi Rapport_Final).",
+    "              Extensions : les types de fichier acceptés. Plusieurs fichiers trouvés : la tuile propose de choisir.",
+    "Type none   : pas encore configuré, non affiché.",
     "Shortcut    : (facultatif) une lettre pour le raccourci Ctrl+lettre."
   ],
   "Buttons": [
-    { "Label": "Dossier",  "Type": "folder" },
-    { "Label": "Manip",    "Type": "file", "Pattern": "manip", "Extensions": [".xlsx", ".xlsm", ".xls"], "Shortcut": "M" },
-    { "Label": "Bouton 3", "Type": "none" },
-    { "Label": "Bouton 4", "Type": "none" },
+    { "Label": "Dossier",       "Type": "folder", "Shortcut": "D" },
+    { "Label": "Manip",         "Type": "file", "Pattern": "manip", "Extensions": [".xlsx", ".xlsm", ".xls"], "Shortcut": "M" },
+    { "Label": "Study Plan",    "Type": "file", "Pattern": "plan", "Extensions": [".docx", ".doc", ".pdf"], "Shortcut": "S" },
+    { "Label": "Rapport final", "Type": "file", "Pattern": "rapport final", "Extensions": [".docx", ".doc", ".pdf"], "Shortcut": "R" },
     { "Label": "Bouton 5", "Type": "none" },
     { "Label": "Bouton 6", "Type": "none" }
   ]

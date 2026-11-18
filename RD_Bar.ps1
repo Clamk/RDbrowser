@@ -3,7 +3,8 @@
 #   Raccourci global (Hotkey du fichier de réglages, ou celui choisi sur ce PC) : ouvre la barre.
 #   Entrée = action surlignée, Haut/Bas = déplacer, Ctrl+lettre/chiffre = actions, Alt+1..6 = liens, Alt+7..0 = mes liens, Échap = masquer.
 #   Recherche : un numéro (7, RD007) = dossier RD dans RootPath ; des lettres + un numéro (ALP2) = dossier projet dans ProjectsPath ; des lettres seules (ALP) = liste de ces projets.
-#   Dossier trouvé : ses actions, puis les fichiers à sa racine rangés par type (Excel, Word, PDF, PowerPoint, images, autres).
+#   Dossier trouvé : une rangée de tuiles (Dossier, Manip, Study Plan, Rapport final : Ctrl+D/M/S/R), puis les fichiers à sa racine
+#   rangés par type (Excel, Word, PDF, PowerPoint, images, autres). Entrée sans fichier surligné = ouvrir le dossier.
 #   Mes liens : chacun ajoute ses propres liens avec « Ajouter un lien » (enregistrés sur ce PC, dans mes_liens.json).
 #   Réglages : RD_Browser.config.json (relu à chaque ouverture). Mise à jour : copie partagée adoptée au démarrage si elle est valide.
 param([switch]$Install, [switch]$Uninstall, [string]$SourceDir, [switch]$Welcome)
@@ -123,8 +124,8 @@ function Find-RdFolder($rd) {
 
 function Find-Files($files, $btn) {   # among the folder's files, those a button looks for (newest first)
     $ext = if ($btn.Extensions) { @($btn.Extensions) } else { '.xlsx', '.xlsm', '.xls' }
-    $pattern = [regex]::Escape("$($btn.Pattern)")
-    $files | Where-Object { $ext -contains $_.Extension -and $_.BaseName -match $pattern } | Sort-Object LastWriteTime -Descending
+    $pattern = [regex]::Escape(("$($btn.Pattern)" -replace '[\s_-]'))   # spaces, _ and - are ignored on both sides
+    $files | Where-Object { $ext -contains $_.Extension -and ($_.BaseName -replace '[\s_-]') -match $pattern } | Sort-Object LastWriteTime -Descending
 }
 
 # Files in the root of a folder, ordered by type (Excel, Word, PDF, PowerPoint, images, others), newest first within a type.
@@ -139,6 +140,10 @@ $fileTypes = @(
 function Get-FileType($file) {   # position of the file's type in $fileTypes (others last)
     for ($t = 0; $t -lt $fileTypes.Count; $t++) { if ($fileTypes[$t].Ext -contains $file.Extension) { return $t } }
     $fileTypes.Count
+}
+function Get-FileIcon($ext) {   # icon name for a file extension
+    $t = Get-FileType ([pscustomobject]@{ Extension = $ext })
+    if ($t -lt $fileTypes.Count) { $fileTypes[$t].Icon } else { 'file' }
 }
 function Get-FolderFiles($folder) {
     Get-ChildItem -LiteralPath $folder.FullName -File -EA 0 |
@@ -274,7 +279,7 @@ $window = [Windows.Markup.XamlReader]::Parse(@'
 
         <!-- Search box (accent underline), RD header, message line, actions (actions share the remaining height) -->
         <Grid Margin="14,14,12,10">
-          <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition/></Grid.RowDefinitions>
+          <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition/></Grid.RowDefinitions>
           <Grid Height="44">
             <Border CornerRadius="6" BorderThickness="1" Background="{DynamicResource Box}" BorderBrush="{DynamicResource CardLine}"/>
             <Border Height="2" VerticalAlignment="Bottom" CornerRadius="0,0,6,6" Background="{DynamicResource Accent}"/>
@@ -297,7 +302,46 @@ $window = [Windows.Markup.XamlReader]::Parse(@'
             <TextBlock x:Name="RdPath" FontSize="12" Margin="10,0,0,1" VerticalAlignment="Bottom" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource Muted}"/>
           </DockPanel>
           <TextBlock x:Name="Message" Grid.Row="2" Margin="4,10,4,0" FontSize="13" TextWrapping="Wrap"/>
-          <ItemsControl x:Name="Rows" Grid.Row="3" Margin="0,8,0,0">
+          <!-- Action tiles (Dossier, Manip, ...): one row of buttons for the found folder; greyed when there is nothing to open -->
+          <ItemsControl x:Name="Tiles" Grid.Row="3" Margin="-3,10,-3,0">
+            <ItemsControl.ItemsPanel><ItemsPanelTemplate><UniformGrid Rows="1"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate><DataTemplate>
+              <Border x:Name="B" Margin="3,0" Padding="10,8,8,8" CornerRadius="6" BorderThickness="1" Cursor="Hand" ToolTip="{Binding Tip}"
+                      Background="{DynamicResource Box}" BorderBrush="{DynamicResource CardLine}">
+                <StackPanel>
+                  <DockPanel>
+                    <Border x:Name="K" DockPanel.Dock="Right" Style="{StaticResource Kbd}" CornerRadius="3" Padding="4,0">
+                      <TextBlock x:Name="KT" Text="{Binding Hint}" FontSize="10" Foreground="{DynamicResource KbdText}"/>
+                    </Border>
+                    <Path x:Name="P" Style="{StaticResource Ico}" Width="18" Height="18" HorizontalAlignment="Left" Stroke="{DynamicResource Text}" Data="{Binding Geo}"/>
+                  </DockPanel>
+                  <TextBlock x:Name="T" Text="{Binding Text}" Margin="0,7,0,0" FontSize="13" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource Text}"/>
+                  <TextBlock x:Name="S" Text="{Binding Sub}" Margin="0,1,0,0" FontSize="11" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource Muted}"/>
+                </StackPanel>
+              </Border>
+              <DataTemplate.Triggers>
+                <Trigger SourceName="B" Property="IsMouseOver" Value="True"><Setter TargetName="B" Property="Background" Value="{DynamicResource Hover}"/></Trigger>
+                <DataTrigger Binding="{Binding Sel}" Value="True">
+                  <Setter TargetName="B" Property="Background" Value="{DynamicResource Sel}"/>
+                  <Setter TargetName="B" Property="BorderBrush" Value="{DynamicResource Sel}"/>
+                  <Setter TargetName="P" Property="Stroke" Value="{DynamicResource SelText}"/>
+                  <Setter TargetName="T" Property="Foreground" Value="{DynamicResource SelText}"/>
+                  <Setter TargetName="S" Property="Foreground" Value="{DynamicResource SelText}"/>
+                  <Setter TargetName="K" Property="BorderBrush" Value="{DynamicResource SelKbd}"/>
+                  <Setter TargetName="KT" Property="Foreground" Value="{DynamicResource SelText}"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding On}" Value="False">
+                  <Setter TargetName="B" Property="Cursor" Value="Arrow"/>
+                  <Setter TargetName="B" Property="Background" Value="Transparent"/>
+                  <Setter TargetName="P" Property="Stroke" Value="{DynamicResource Dim}"/>
+                  <Setter TargetName="T" Property="Foreground" Value="{DynamicResource Dim}"/>
+                  <Setter TargetName="S" Property="Foreground" Value="{DynamicResource Dim}"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Hint}" Value=""><Setter TargetName="K" Property="Visibility" Value="Collapsed"/></DataTrigger>
+              </DataTemplate.Triggers>
+            </DataTemplate></ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <ItemsControl x:Name="Rows" Grid.Row="4" Margin="0,8,0,0">
             <ItemsControl.ItemsPanel><ItemsPanelTemplate><UniformGrid Columns="1"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
             <ItemsControl.ItemTemplate><DataTemplate>
               <Border x:Name="R" Height="42" Margin="0,2" Padding="12,0" CornerRadius="6" Background="Transparent" Cursor="Hand">
@@ -393,7 +437,7 @@ $window = [Windows.Markup.XamlReader]::Parse(@'
   </Grid>
 </Window>
 '@)
-foreach ($n in 'Box', 'Header', 'RdName', 'RdPath', 'Message', 'Rows', 'Links', 'LinksTitle', 'MyLinks', 'AddLink', 'ThemeBtn', 'ThemeIco', 'KeyBtn', 'Cog',
+foreach ($n in 'Box', 'Header', 'RdName', 'RdPath', 'Message', 'Tiles', 'Rows', 'Links', 'LinksTitle', 'MyLinks', 'AddLink', 'ThemeBtn', 'ThemeIco', 'KeyBtn', 'Cog',
               'PaletteBtn', 'Picker', 'Swatches', 'SchemeName') {
     Set-Variable $n $window.FindName($n)
 }
@@ -499,10 +543,7 @@ function Set-Message($text, [switch]$IsError) {
 # Indexes of the rows that can be used right now
 function Get-Live {
     if ($S.Pick) { return 0..($S.Pick.Count - 1) }
-    if ($S.Folder) {
-        for ($i = 0; $i -lt $buttons.Count; $i++) { if ($buttons[$i].Type -eq 'folder' -or $S.Matches[$i].Count) { $i } }
-        for ($j = 0; $j -lt $S.Files.Count; $j++) { $buttons.Count + $j }   # the folder's files, after the buttons
-    }
+    if ($S.Folder -and $S.Files.Count) { 0..($S.Files.Count - 1) }   # the folder's files
 }
 
 function New-Row($i, $geo, $text, $sub, $on, $key) {
@@ -518,6 +559,7 @@ function Render {
     $RdName.SetResourceReference($fg, $(if ($ok) { 'Text' } else { 'Error' }))
     $RdPath.Text = if ($S.Folder) { $S.Folder.FullName } else { "dans $($S.Where)" }
     $live = @(Get-Live)
+    Build-Tiles $pickingFolder
     if ($S.Pick) {   # a list to choose from: folders (several projects) or files (several Manip...)
         $n = $S.Pick.Count
         $first = [math]::Max(0, [math]::Min($S.Sel - 3, $n - $pickRows))   # show $pickRows lines around the selection
@@ -530,7 +572,7 @@ function Render {
         } else {
             Set-Message "$n fichiers $($S.PickLabel) trouvés - choisissez-en un (Échap pour revenir)$where"
             $Rows.ItemsSource = @(for ($i = $first; $i -le $last; $i++) {
-                New-Row $i $icons.sheet $S.Pick[$i].Name $S.Pick[$i].LastWriteTime.ToString('yyyy-MM-dd HH:mm') $true ''
+                New-Row $i $icons[(Get-FileIcon $S.Pick[$i].Extension)] $S.Pick[$i].Name $S.Pick[$i].LastWriteTime.ToString('yyyy-MM-dd HH:mm') $true ''
             })
         }
         return
@@ -540,31 +582,42 @@ function Render {
     elseif ($S.Loading) { Set-Message 'Chargement de la liste des projets…' }
     elseif ($S.Kind -eq 'project' -and $projFail) { Set-Message "Emplacement des projets inaccessible : $projRoot" -IsError }
     else { Set-Message '' }
-    $all = @(for ($i = 0; $i -lt $buttons.Count; $i++) {
-        $b = $buttons[$i]; $m = $S.Matches[$i]; $on = $live -contains $i
-        $key = if ($b.Shortcut) { "Ctrl+$("$($b.Shortcut)".ToUpper())" } else { "Ctrl+$($i + 1)" }
-        switch ($b.Type) {   # buttons of any other type are not set up yet: hidden
-            'folder' { New-Row $i $icons.folder 'Ouvrir le dossier' '' $on $key }
-            'file'   {
-                $sub = if (-not $S.Folder) { '' } elseif ($m.Count -gt 1) { "$($m.Count) fichiers" } elseif ($m) { $m[0].Name } else { 'aucun fichier trouvé' }
-                New-Row $i $icons.sheet "Ouvrir $($b.Label)" $sub $on $key
-            }
-        }
-    }
-    for ($j = 0; $j -lt $S.Files.Count; $j++) {   # then the folder's own files, by type (icon only)
+    $all = @(for ($j = 0; $j -lt $S.Files.Count; $j++) {   # the folder's own files, by type (icon only)
         $f = $S.Files[$j]
-        $t = Get-FileType $f
-        $ico = if ($t -lt $fileTypes.Count) { $fileTypes[$t].Icon } else { 'file' }
-        New-Row ($buttons.Count + $j) $icons[$ico] $f.Name $f.LastWriteTime.ToString('yyyy-MM-dd') $true ''
+        New-Row $j $icons[(Get-FileIcon $f.Extension)] $f.Name $f.LastWriteTime.ToString('yyyy-MM-dd') $true ''
     })
     # show $pickRows lines around the selection
-    $pos = 0; for ($k = 0; $k -lt $all.Count; $k++) { if ($all[$k].I -eq $S.Sel) { $pos = $k } }
+    $pos = [math]::Max(0, $S.Sel)
     $first = [math]::Max(0, [math]::Min($pos - 3, $all.Count - $pickRows))
     $shown = @($all | Select-Object -Skip $first -First $pickRows)
     $where = if ($all.Count -gt $pickRows) { "lignes $($first + 1)-$($first + $shown.Count) sur $($all.Count) (↑↓ pour défiler)" } else { '' }
     if ($S.FolderPick) { Set-Message (@('Échap pour revenir à la liste des dossiers', $where) -ne '' -join ' · ') }
-    elseif ($S.Folder) { Set-Message $where }
+    elseif ($S.Folder) { Set-Message $(if ($S.Files.Count) { $where } else { 'Aucun fichier à la racine de ce dossier' }) }
     $Rows.ItemsSource = $shown
+}
+
+function Build-Tiles([bool]$hidden) {   # one tile per set-up button; Entrée opens the folder while no file is highlighted
+    $Tiles.Visibility = if ($hidden) { 'Collapsed' } else { 'Visible' }
+    $Tiles.ItemsSource = @(for ($i = 0; $i -lt $buttons.Count; $i++) {
+        $b = $buttons[$i]; $m = @($S.Matches[$i])
+        if ($b.Type -notin 'folder', 'file') { continue }   # buttons of any other type are not set up yet: hidden
+        $key = if ($b.Shortcut) { "Ctrl+$("$($b.Shortcut)".ToUpper())" } else { "Ctrl+$($i + 1)" }
+        if ($b.Type -eq 'folder') {
+            $on = [bool]$S.Folder
+            $sel = $on -and $S.Sel -lt 0 -and -not $S.Pick
+            $geo = $icons.folder; $sub = if ($on) { 'Ouvrir' } else { '' }
+            $tip = 'Ouvrir le dossier dans l''Explorateur'
+        } else {
+            $on = $S.Folder -and $m.Count -gt 0
+            $sel = $false
+            $ext = @($b.Extensions)[0]; if (-not $ext) { $ext = '.xlsx' }
+            $geo = $icons[(Get-FileIcon $ext)]
+            $sub = if (-not $S.Folder) { '' } elseif ($m.Count -gt 1) { "$($m.Count) fichiers" } elseif ($m.Count) { $m[0].Name } else { 'aucun fichier' }
+            $tip = "Ouvrir le fichier $($b.Label) (nom contenant « $($b.Pattern) »)"
+        }
+        [pscustomobject]@{ I = $i; Geo = $geo; Text = $b.Label; Sub = $sub; Tip = $tip; On = [bool]$on; Sel = [bool]$sel
+                           Hint = $(if ($sel) { 'Entrée' } else { $key }) }
+    })
 }
 
 function Update-FromInput {
@@ -590,14 +643,17 @@ function Select-Folder($folder) {   # reads the chosen folder's files, finds the
     $S.Matches = @{}
     $S.Files = @(if ($folder) { Get-FolderFiles $folder })
     if ($folder) { for ($i = 0; $i -lt $buttons.Count; $i++) { if ($buttons[$i].Type -eq 'file') { $S.Matches[$i] = @(Find-Files $S.Files $buttons[$i]) } } }
-    $S.Sel = (@(Get-Live) + -1)[0]
+    $S.Sel = if ($S.Pick) { 0 } else { -1 }
     Render
 }
 
 function Move-Sel($step) {
     $live = @(Get-Live)
     if (-not $live.Count) { return }
-    $S.Sel = $live[([array]::IndexOf($live, $S.Sel) + $step + $live.Count) % $live.Count]
+    $idx = [array]::IndexOf($live, $S.Sel)
+    if ($idx -lt 0) { $S.Sel = $live[$(if ($step -gt 0) { 0 } else { $live.Count - 1 })] }
+    elseif (-not $S.Pick -and ($idx + $step -lt 0 -or $idx + $step -ge $live.Count)) { $S.Sel = -1 }   # past either end: back to the tiles (Entrée = folder)
+    else { $S.Sel = $live[($idx + $step + $live.Count) % $live.Count] }
     Render
 }
 
@@ -846,12 +902,15 @@ function Invoke-Row($i) {
         return Select-Folder $S.FolderPick[$i]
     }
     if ($S.Pick) { return Open-Target $S.Pick[$i].FullName }
-    if (@(Get-Live) -notcontains $i) { return }
-    if ($i -ge $buttons.Count) { return Open-Target $S.Files[$i - $buttons.Count].FullName }   # one of the folder's files
+    if (@(Get-Live) -contains $i) { Open-Target $S.Files[$i].FullName }   # one of the folder's files
+}
+
+function Invoke-Button($i) {   # a tile: open the folder, the one matching file, or the list of matching files
+    if (-not $S.Folder) { return }
     $m = @($S.Matches[$i])
     if ($buttons[$i].Type -eq 'folder') { Open-Target $S.Folder.FullName }
     elseif ($m.Count -eq 1) { Open-Target $m[0].FullName }
-    else { $S.Pick = $m; $S.PickLabel = $buttons[$i].Label; $S.Sel = 0; Render }
+    elseif ($m.Count -gt 1) { $S.Pick = $m; $S.PickLabel = $buttons[$i].Label; $S.Sel = 0; Render }
 }
 
 # ---------------------------------------------------------------- changing the shortcut (keyboard button)
@@ -886,6 +945,7 @@ function Complete-Capture($candidate, [switch]$Reset) {
 # ---------------------------------------------------------------- events
 $Box.Add_TextChanged({ Update-FromInput })
 $Rows.Add_MouseLeftButtonUp({ param($src, $e) $d = $e.OriginalSource.DataContext; if ($d.On) { Invoke-Row $d.I } })
+$Tiles.Add_MouseLeftButtonUp({ param($src, $e) $d = $e.OriginalSource.DataContext; if ($d.On) { Invoke-Button $d.I } })
 $Rows.Add_PreviewMouseWheel({ param($src, $e) if ($S.Pick -or $S.Folder) { $e.Handled = $true; Move-Sel $(if ($e.Delta -gt 0) { -1 } else { 1 }) } })   # scroll long lists
 $Links.Add_MouseLeftButtonUp({ param($src, $e) $d = $e.OriginalSource.DataContext; if ($d.Path) { Open-Target $d.Path } })
 $MyLinks.Add_MouseLeftButtonUp({ param($src, $e) $d = $e.OriginalSource.DataContext; if ($d.Path) { Open-Target $d.Path } })
@@ -935,7 +995,7 @@ $window.Add_PreviewKeyDown({
     if ($key -eq 'Escape' -and $Picker.Visibility -eq 'Visible') { return Show-Picker $false }
     switch ($key) {
         'Escape' {
-            if ($S.Pick -and $S.PickKind -ne 'folder') { $S.Pick = $null; $S.Sel = (@(Get-Live) + -1)[0]; Render }   # files list -> buttons
+            if ($S.Pick -and $S.PickKind -ne 'folder') { $S.Pick = $null; $S.Sel = -1; Render }   # list of matching files -> folder view
             elseif ($S.FolderPick -and -not $S.Pick) {                                                                 # buttons -> folders list
                 $S.Pick = $S.FolderPick; $S.PickKind = 'folder'; $S.FolderPick = $null; $S.Folder = $null; $S.Sel = 0; Render
             }
@@ -944,7 +1004,7 @@ $window.Add_PreviewKeyDown({
         }
         'Down'   { return Move-Sel 1 }
         'Up'     { return Move-Sel -1 }
-        'Return' { if ($S.Sel -ge 0) { Invoke-Row $S.Sel }; return }
+        'Return' { if ($S.Sel -ge 0) { Invoke-Row $S.Sel } elseif ($S.Folder) { Open-Target $S.Folder.FullName }; return }
     }
     $digit = if ($key -match '^(D|NumPad)(\d)$') { [int]$Matches[2] }
     if ($null -ne $digit -and $mods -eq 'Alt') {   # Alt+1..6 = shared links, Alt+7 8 9 0 = the first 4 of "Mes liens"
@@ -956,7 +1016,7 @@ $window.Add_PreviewKeyDown({
     }
     if ($mods -eq 'Control' -and -not $S.Pick) {
         for ($i = 0; $i -lt $buttons.Count; $i++) {
-            if ($digit -eq $i + 1 -or ($buttons[$i].Shortcut -and $key -eq "$($buttons[$i].Shortcut)")) { return Invoke-Row $i }
+            if ($digit -eq $i + 1 -or ($buttons[$i].Shortcut -and $key -eq "$($buttons[$i].Shortcut)")) { return Invoke-Button $i }
         }
     }
     $e.Handled = $false
