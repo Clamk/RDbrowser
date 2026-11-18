@@ -2,6 +2,7 @@
 #   Setup.cmd / Uninstall.cmd : installe (copie locale + démarrage à la connexion) / désinstalle.
 #   Raccourci global (Hotkey du fichier de réglages, ou celui choisi sur ce PC) : ouvre la barre.
 #   Entrée = action surlignée, Haut/Bas = déplacer, Ctrl+lettre/chiffre = actions, Alt+1..6 = liens, Alt+7..0 = mes liens, Échap = masquer.
+#   Recherche : un numéro (7, RD007) = dossier RD dans RootPath ; des lettres + un numéro (ALP2) = dossier projet dans ProjectsPath.
 #   Mes liens : chacun ajoute ses propres liens avec « Ajouter un lien » (enregistrés sur ce PC, dans mes_liens.json).
 #   Réglages : RD_Browser.config.json (relu à chaque ouverture). Mise à jour : copie partagée adoptée au démarrage si elle est valide.
 param([switch]$Install, [switch]$Uninstall, [string]$SourceDir, [switch]$Welcome)
@@ -35,6 +36,8 @@ function Read-Config {
             [pscustomobject]@{ Label = 'Manip'; Type = 'file'; Pattern = 'manip'; Shortcut = 'M' }) }
     }
     $script:root    = [IO.Path]::GetFullPath([IO.Path]::Combine($SourceDir, "$($config.RootPath)"))
+    # Optional second location: enterprise folders, each holding project folders named with letters + a number (e.g. ALP002)
+    $script:projRoot = if ("$($config.ProjectsPath)".Trim()) { [IO.Path]::GetFullPath([IO.Path]::Combine($SourceDir, "$($config.ProjectsPath)".Trim())) }
     $script:buttons = @($config.Buttons)
     $script:defaultHotkey = if ($config.Hotkey) { "$($config.Hotkey)" } else { 'Ctrl+Alt+F' }
     $own = Get-Content -LiteralPath $hotkeyFile -EA 0 | Select-Object -First 1
@@ -99,7 +102,15 @@ if (-not $isFirst) { return }
 Read-Config
 
 # ---------------------------------------------------------------- RD lookup
-function Get-RdName($text) { $d = $text -replace '\D'; if ($d -and $d.Length -le 6) { 'RD{0:D3}' -f [int]$d } }
+# What was typed: digits (optionally after "RD") = an RD folder; letters then digits (ALP2, alp 002) = a project folder
+function Get-Query($text) {
+    $t = "$text".Trim()
+    if ($t -match '^(rd)?[\s_-]*(\d{1,6})$') { return @{ Kind = 'rd'; Label = 'RD{0:D3}' -f [int]$Matches[2] } }
+    if ($t -match '^([a-z]{1,8})[\s_-]*(\d{1,6})$') {
+        $letters = $Matches[1].ToUpper(); $number = [int]$Matches[2]
+        return @{ Kind = 'project'; Letters = $letters; Number = $number; Label = '{0}{1:D3}' -f $letters, $number }
+    }
+}
 
 function Find-RdFolder($rd) {
     $exact = Join-Path $root $rd
@@ -451,7 +462,8 @@ function Show-Picker([bool]$open) {
 function Save-Pref($file, $value) { try { $null = New-Item -ItemType Directory -Force $appDir; Set-Content -LiteralPath $file $value -Encoding ASCII } catch { } }
 
 # ---------------------------------------------------------------- state and rendering
-$S = @{ Sel = -1; Rd = $null; Folder = $null; Matches = @{}; Pick = $null; PickLabel = ''; Visible = $false; Quitting = $false; Capture = $false; Dialog = $false }
+$S = @{ Sel = -1; Rd = $null; Kind = $null; Where = $null; Folder = $null; Matches = @{}; Pick = $null; PickKind = $null; PickLabel = ''; FolderPick = $null
+        Loading = $false; Visible = $false; Quitting = $false; Capture = $false; Dialog = $false }
 $fg = [Windows.Controls.TextBlock]::ForegroundProperty
 
 function Set-Message($text, [switch]$IsError) {
@@ -472,11 +484,20 @@ function New-Row($i, $geo, $text, $sub, $on, $key) {
 }
 
 function Render {
+    $pickingFolder = $S.PickKind -eq 'folder'
+    $ok = $S.Folder -or $pickingFolder -or $S.Loading   # nothing to report as missing
     $Header.Visibility = if ($S.Rd) { 'Visible' } else { 'Collapsed' }
-    $RdName.Text = if ($S.Folder) { $S.Folder.Name } else { "$($S.Rd) introuvable" }
-    $RdName.SetResourceReference($fg, $(if ($S.Folder) { 'Text' } else { 'Error' }))
-    $RdPath.Text = if ($S.Folder) { $S.Folder.FullName } else { "dans $root" }
+    $RdName.Text = if ($S.Folder) { $S.Folder.Name } elseif ($ok) { $S.Rd } else { "$($S.Rd) introuvable" }
+    $RdName.SetResourceReference($fg, $(if ($ok) { 'Text' } else { 'Error' }))
+    $RdPath.Text = if ($S.Folder) { $S.Folder.FullName } else { "dans $($S.Where)" }
     $live = @(Get-Live)
+    if ($pickingFolder) {
+        Set-Message "$($S.Pick.Count) dossiers trouvés pour $($S.Rd) - choisissez-en un"
+        $Rows.ItemsSource = @(for ($i = 0; $i -lt $S.Pick.Count; $i++) {
+            New-Row $i $icons.folder $S.Pick[$i].Name $S.Pick[$i].Enterprise $true ''
+        })
+        return
+    }
     if ($S.Pick) {
         Set-Message "$($S.Pick.Count) fichiers $($S.PickLabel) trouvés - choisissez-en un (Échap pour revenir)"
         $Rows.ItemsSource = @(for ($i = 0; $i -lt $S.Pick.Count; $i++) {
@@ -484,7 +505,12 @@ function Render {
         })
         return
     }
-    Set-Message $(if (-not $S.Rd) { 'Tapez un numéro de RD, par ex. 7 ou RD007' })
+    $hint = if ($projRoot) { 'Tapez un numéro de RD (par ex. 7 ou RD007) ou un code projet (par ex. ALP2)' } else { 'Tapez un numéro de RD, par ex. 7 ou RD007' }
+    if (-not $S.Rd) { Set-Message $hint }
+    elseif ($S.Loading) { Set-Message 'Chargement de la liste des projets…' }
+    elseif ($S.Kind -eq 'project' -and $projFail) { Set-Message "Emplacement des projets inaccessible : $projRoot" -IsError }
+    elseif ($S.FolderPick) { Set-Message 'Échap pour revenir à la liste des dossiers' }
+    else { Set-Message '' }
     $Rows.ItemsSource = @(for ($i = 0; $i -lt $buttons.Count; $i++) {
         $b = $buttons[$i]; $m = $S.Matches[$i]; $on = $live -contains $i
         $key = if ($b.Shortcut) { "Ctrl+$("$($b.Shortcut)".ToUpper())" } else { "Ctrl+$($i + 1)" }
@@ -499,11 +525,27 @@ function Render {
 }
 
 function Update-FromInput {
-    $S.Pick = $null
-    $S.Rd = Get-RdName $Box.Text
-    $S.Folder = if ($S.Rd) { Find-RdFolder $S.Rd }
+    $S.Pick = $null; $S.PickKind = $null; $S.FolderPick = $null; $S.Folder = $null; $S.Loading = $false
+    $q = Get-Query $Box.Text
+    $S.Kind = $q.Kind; $S.Rd = $q.Label; $S.Where = $root
+    if ($q.Kind -eq 'rd') { $S.Folder = Find-RdFolder $q.Label }
+    elseif ($q.Kind -eq 'project') {
+        if (-not $projRoot) { $S.Rd = $null }   # no project location set up: treat like an empty box
+        else {
+            $S.Where = $projRoot
+            $found = @(Find-Projects $q)
+            if ($null -eq $projIndex) { $S.Loading = $true; Start-ProjectScan }
+            elseif ($found.Count -eq 1) { $S.Folder = $found[0] }
+            elseif ($found.Count -gt 1) { $S.Pick = $found; $S.PickKind = 'folder' }
+        }
+    }
+    Select-Folder $S.Folder
+}
+
+function Select-Folder($folder) {   # looks for the buttons' files in the chosen folder, then shows the buttons
+    $S.Folder = $folder
     $S.Matches = @{}
-    if ($S.Folder) { for ($i = 0; $i -lt $buttons.Count; $i++) { if ($buttons[$i].Type -eq 'file') { $S.Matches[$i] = Find-Files $S.Folder $buttons[$i] } } }
+    if ($folder) { for ($i = 0; $i -lt $buttons.Count; $i++) { if ($buttons[$i].Type -eq 'file') { $S.Matches[$i] = Find-Files $folder $buttons[$i] } } }
     $S.Sel = (@(Get-Live) + -1)[0]
     Render
 }
@@ -665,6 +707,53 @@ $editMenu = New-Menu @(
     , @('Supprimer', { Edit-MyLink 'remove' })
 )
 
+# ---------------------------------------------------------------- project folders (ProjectsPath): list kept up to date in the background
+# Reading 50-300 enterprise folders on the NAS takes seconds, so it is done out of sight; typing then only searches the list.
+$projIndex = $null; $projIndexRoot = $null; $projFail = $false; $projJob = $null; $projStamp = [datetime]::MinValue
+
+function Start-ProjectScan {
+    if (-not $projRoot -or $projJob) { return }
+    $ps = [powershell]::Create()
+    [void]$ps.AddScript({
+        param($root)
+        foreach ($ent in [IO.Directory]::GetDirectories($root)) {
+            try {
+                foreach ($p in [IO.Directory]::GetDirectories($ent)) {
+                    [pscustomobject]@{ Name = [IO.Path]::GetFileName($p); FullName = $p; Enterprise = [IO.Path]::GetFileName($ent) }
+                }
+            } catch { }   # an enterprise folder we may not open: skip it
+        }
+    }).AddArgument($projRoot)
+    $script:projJob = @{ PS = $ps; Handle = $ps.BeginInvoke(); Root = $projRoot }
+    $scanTimer.Start()
+}
+
+$scanTimer = New-Object Windows.Threading.DispatcherTimer
+$scanTimer.Interval = [TimeSpan]::FromMilliseconds(300)
+$scanTimer.Add_Tick({   # checks whether the background reading has finished
+    if (-not $projJob -or -not $projJob.Handle.IsCompleted) { return }
+    $scanTimer.Stop()
+    $found = @()
+    try { $found = @($projJob.PS.EndInvoke($projJob.Handle)) } catch { }
+    $script:projFail = $projJob.PS.HadErrors -and -not $found.Count   # location unreachable
+    $script:projIndex = @($found | Sort-Object Name)
+    $script:projIndexRoot = $projJob.Root
+    $projJob.PS.Dispose()
+    $script:projJob = $null
+    $script:projStamp = Get-Date
+    if ($S.Visible -and $S.Loading) { Update-FromInput }   # someone was waiting for the list
+})
+
+function Update-ProjectIndex {   # on opening the bar: forget the list if the location changed, refresh it if older than a minute
+    if ($projRoot -ne $projIndexRoot) { $script:projIndex = $null; $script:projIndexRoot = $projRoot; $script:projStamp = [datetime]::MinValue }
+    if ($projRoot -and ((Get-Date) - $projStamp).TotalSeconds -gt 60) { Start-ProjectScan }
+}
+
+function Find-Projects($q) {   # ALP2 matches ALP2, ALP002, ALP-002, "Essai ALP002"; not XALP002 or ALP0021
+    $rx = '(?<![a-z])' + [regex]::Escape($q.Letters) + '[\s_-]*0*' + $q.Number + '(?!\d)'
+    @($projIndex | Where-Object { $_.Name -match $rx })
+}
+
 # ---------------------------------------------------------------- actions
 function Hide-Bar {
     if ($S.Capture) { Complete-Capture '' }
@@ -675,6 +764,7 @@ function Hide-Bar {
 function Show-Bar {
     if (-not $S.Visible) {
         Read-Config
+        Update-ProjectIndex
         Build-Links
         Read-MyLinks
         Build-MyLinks
@@ -701,6 +791,10 @@ function Open-AppFiles {
 }
 
 function Invoke-Row($i) {
+    if ($S.PickKind -eq 'folder') {   # one of several project folders chosen: remember the list for Échap
+        $S.FolderPick = $S.Pick; $S.Pick = $null; $S.PickKind = $null
+        return Select-Folder $S.FolderPick[$i]
+    }
     if ($S.Pick) { return Open-Target $S.Pick[$i].FullName }
     if (@(Get-Live) -notcontains $i) { return }
     $m = @($S.Matches[$i])
@@ -788,7 +882,14 @@ $window.Add_PreviewKeyDown({
 
     if ($key -eq 'Escape' -and $Picker.Visibility -eq 'Visible') { return Show-Picker $false }
     switch ($key) {
-        'Escape' { if ($S.Pick) { $S.Pick = $null; $S.Sel = (@(Get-Live) + -1)[0]; Render } else { Hide-Bar }; return }
+        'Escape' {
+            if ($S.Pick -and $S.PickKind -ne 'folder') { $S.Pick = $null; $S.Sel = (@(Get-Live) + -1)[0]; Render }   # files list -> buttons
+            elseif ($S.FolderPick -and -not $S.Pick) {                                                                 # buttons -> folders list
+                $S.Pick = $S.FolderPick; $S.PickKind = 'folder'; $S.FolderPick = $null; $S.Folder = $null; $S.Sel = 0; Render
+            }
+            else { Hide-Bar }
+            return
+        }
         'Down'   { return Move-Sel 1 }
         'Up'     { return Move-Sel -1 }
         'Return' { if ($S.Sel -ge 0) { Invoke-Row $S.Sel }; return }
@@ -869,4 +970,5 @@ if (-not $hk) {
     $tray.ShowBalloonTip(5000, 'RD Browser est prêt', "Appuyez sur $hotkey n'importe où pour l'ouvrir. Il reste ici, près de l'horloge.", 'Info')
 }
 
+Update-ProjectIndex   # start reading the project folders now, so the list is ready at first use
 [System.Windows.Threading.Dispatcher]::Run()

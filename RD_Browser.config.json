@@ -9,6 +9,17 @@
   "RootPath": "..",
   "Hotkey": "Ctrl+Alt+F",
 
+  "ProjectsPath_AIDE": [
+    "ProjectsPath : (facultatif) un second endroit où chercher, rangé par entreprise.",
+    "  Il contient un dossier par entreprise, et dans chacun des dossiers projet dont le nom contient un code : quelques lettres puis un numéro.",
+    "  Exemple : \\\\serveur\\partage\\Clients  ->  Alpha Pharma\\ALP002 Stabilité",
+    "  Dans la barre, tapez le code : ALP2, alp 002 ou ALP002 trouvent le même dossier (les zéros ne comptent pas).",
+    "  Un numéro seul (7, RD007) cherche toujours dans les dossiers RD.",
+    "  Laissez vide (deux guillemets, rien entre les deux) pour ne pas utiliser ce second endroit.",
+    "  La liste des projets est relue en arrière-plan : un dossier tout juste créé apparaît dans la minute."
+  ],
+  "ProjectsPath": "",
+
   "QuickLinks_AIDE": [
     "LIENS RAPIDES = les 6 boutons AU-DESSUS de la barre de recherche. Ils ouvrent toujours le même endroit, quel que soit le numéro de RD tapé.",
     "Name : le texte affiché sur le bouton. Restez court (environ 12 caractères).",
