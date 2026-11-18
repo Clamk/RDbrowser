@@ -3,6 +3,7 @@
 #   Raccourci global (Hotkey du fichier de réglages, ou celui choisi sur ce PC) : ouvre la barre.
 #   Entrée = action surlignée, Haut/Bas = déplacer, Ctrl+lettre/chiffre = actions, Alt+1..6 = liens, Alt+7..0 = mes liens, Échap = masquer.
 #   Recherche : un numéro (7, RD007) = dossier RD dans RootPath ; des lettres + un numéro (ALP2) = dossier projet dans ProjectsPath ; des lettres seules (ALP) = liste de ces projets.
+#   Dossier trouvé : ses actions, puis les fichiers à sa racine rangés par type (Excel, Word, PDF, PowerPoint, images, autres).
 #   Mes liens : chacun ajoute ses propres liens avec « Ajouter un lien » (enregistrés sur ce PC, dans mes_liens.json).
 #   Réglages : RD_Browser.config.json (relu à chaque ouverture). Mise à jour : copie partagée adoptée au démarrage si elle est valide.
 param([switch]$Install, [switch]$Uninstall, [string]$SourceDir, [switch]$Welcome)
@@ -120,12 +121,29 @@ function Find-RdFolder($rd) {
     Get-ChildItem -LiteralPath $root -Directory -EA 0 | Where-Object Name -match "^$rd(\D|$)" | Select-Object -First 1
 }
 
-function Find-Files($dir, $btn) {
+function Find-Files($files, $btn) {   # among the folder's files, those a button looks for (newest first)
     $ext = if ($btn.Extensions) { @($btn.Extensions) } else { '.xlsx', '.xlsm', '.xls' }
     $pattern = [regex]::Escape("$($btn.Pattern)")
-    Get-ChildItem -LiteralPath $dir.FullName -File -EA 0 |
-        Where-Object { $_.Name -notlike '~$*' -and $ext -contains $_.Extension -and $_.BaseName -match $pattern } |
-        Sort-Object LastWriteTime -Descending
+    $files | Where-Object { $ext -contains $_.Extension -and $_.BaseName -match $pattern } | Sort-Object LastWriteTime -Descending
+}
+
+# Files in the root of a folder, ordered by type (Excel, Word, PDF, PowerPoint, images, others), newest first within a type.
+# Excel's temporary ~$ files and Windows' hidden/system files (Thumbs.db, desktop.ini) are left out.
+$fileTypes = @(
+    @{ Icon = 'sheet'; Ext = '.xlsx', '.xlsm', '.xls', '.csv' }
+    @{ Icon = 'doc';   Ext = '.docx', '.docm', '.doc', '.rtf', '.odt', '.txt' }
+    @{ Icon = 'pdf';   Ext = '.pdf' }
+    @{ Icon = 'slides'; Ext = '.pptx', '.pptm', '.ppt' }
+    @{ Icon = 'image'; Ext = '.png', '.jpg', '.jpeg', '.tif', '.tiff', '.bmp', '.gif' }
+)
+function Get-FileType($file) {   # position of the file's type in $fileTypes (others last)
+    for ($t = 0; $t -lt $fileTypes.Count; $t++) { if ($fileTypes[$t].Ext -contains $file.Extension) { return $t } }
+    $fileTypes.Count
+}
+function Get-FolderFiles($folder) {
+    Get-ChildItem -LiteralPath $folder.FullName -File -EA 0 |
+        Where-Object { $_.Name -notlike '~$*' -and ([int]$_.Attributes -band 6) -eq 0 }   # 6 = Hidden (2) + System (4) |
+        Sort-Object @{ Expression = { Get-FileType $_ } }, @{ Expression = 'LastWriteTime'; Descending = $true }
 }
 
 # ---------------------------------------------------------------- global shortcut
@@ -387,6 +405,10 @@ $icons = @{}
     globe  = 'M21,12 A9,9 0 1 1 3,12 A9,9 0 1 1 21,12 Z M3,12 L21,12 M12,3 C8,7 8,17 12,21 M12,3 C16,7 16,17 12,21'
     calc   = 'M6,2 L18,2 A2,2 0 0 1 20,4 L20,20 A2,2 0 0 1 18,22 L6,22 A2,2 0 0 1 4,20 L4,4 A2,2 0 0 1 6,2 Z M8,6 L16,6 L16,10 L8,10 Z M8,14 L8.01,14 M12,14 L12.01,14 M16,14 L16.01,14 M8,18 L8.01,18 M12,18 L12.01,18 M16,18 L16.01,18'
     doc    = 'M14,3 L7,3 A2,2 0 0 0 5,5 L5,19 A2,2 0 0 0 7,21 L17,21 A2,2 0 0 0 19,19 L19,8 Z M14,3 L14,8 L19,8 M9,13 L15,13 M9,17 L15,17'
+    pdf    = 'M14,3 L7,3 A2,2 0 0 0 5,5 L5,19 A2,2 0 0 0 7,21 L17,21 A2,2 0 0 0 19,19 L19,8 Z M14,3 L14,8 L19,8 M8,17 L16,17 L16,12 L8,12 Z'
+    slides = 'M4,4 L20,4 A1,1 0 0 1 21,5 L21,16 A1,1 0 0 1 20,17 L4,17 A1,1 0 0 1 3,16 L3,5 A1,1 0 0 1 4,4 Z M12,17 L12,21 M8,21 L16,21'
+    image  = 'M5,3 L19,3 A2,2 0 0 1 21,5 L21,19 A2,2 0 0 1 19,21 L5,21 A2,2 0 0 1 3,19 L3,5 A2,2 0 0 1 5,3 Z M10,9 A1.5,1.5 0 1 1 7,9 A1.5,1.5 0 1 1 10,9 Z M21,15 L16,10 L5,21'
+    file   = 'M14,3 L7,3 A2,2 0 0 0 5,5 L5,19 A2,2 0 0 0 7,21 L17,21 A2,2 0 0 0 19,19 L19,8 Z M14,3 L14,8 L19,8'
     box    = 'M21,8 L12,3 L3,8 L3,16 L12,21 L21,16 Z M3,8 L12,13 L21,8 M12,13 L12,21'
     moon   = 'M21,12.79 A9,9 0 1 1 11.21,3 A7,7 0 0 0 21,12.79 Z'
     sun    = 'M16,12 A4,4 0 1 1 8,12 A4,4 0 1 1 16,12 Z M12,2 L12,4 M12,20 L12,22 M4.93,4.93 L6.34,6.34 M17.66,17.66 L19.07,19.07 M2,12 L4,12 M20,12 L22,12 M4.93,19.07 L6.34,17.66 M17.66,6.34 L19.07,4.93'
@@ -464,7 +486,7 @@ function Show-Picker([bool]$open) {
 function Save-Pref($file, $value) { try { $null = New-Item -ItemType Directory -Force $appDir; Set-Content -LiteralPath $file $value -Encoding ASCII } catch { } }
 
 # ---------------------------------------------------------------- state and rendering
-$S = @{ Sel = -1; Rd = $null; Kind = $null; Where = $null; Folder = $null; Matches = @{}; Pick = $null; PickKind = $null; PickLabel = ''; FolderPick = $null
+$S = @{ Sel = -1; Rd = $null; Kind = $null; Where = $null; Folder = $null; Matches = @{}; Files = @(); Pick = $null; PickKind = $null; PickLabel = ''; FolderPick = $null
         Loading = $false; Visible = $false; Quitting = $false; Capture = $false; Dialog = $false }
 $fg = [Windows.Controls.TextBlock]::ForegroundProperty
 
@@ -477,7 +499,10 @@ function Set-Message($text, [switch]$IsError) {
 # Indexes of the rows that can be used right now
 function Get-Live {
     if ($S.Pick) { return 0..($S.Pick.Count - 1) }
-    if ($S.Folder) { for ($i = 0; $i -lt $buttons.Count; $i++) { if ($buttons[$i].Type -eq 'folder' -or $S.Matches[$i].Count) { $i } } }
+    if ($S.Folder) {
+        for ($i = 0; $i -lt $buttons.Count; $i++) { if ($buttons[$i].Type -eq 'folder' -or $S.Matches[$i].Count) { $i } }
+        for ($j = 0; $j -lt $S.Files.Count; $j++) { $buttons.Count + $j }   # the folder's files, after the buttons
+    }
 }
 
 function New-Row($i, $geo, $text, $sub, $on, $key) {
@@ -514,9 +539,8 @@ function Render {
     if (-not $S.Rd) { Set-Message $hint }
     elseif ($S.Loading) { Set-Message 'Chargement de la liste des projets…' }
     elseif ($S.Kind -eq 'project' -and $projFail) { Set-Message "Emplacement des projets inaccessible : $projRoot" -IsError }
-    elseif ($S.FolderPick) { Set-Message 'Échap pour revenir à la liste des dossiers' }
     else { Set-Message '' }
-    $Rows.ItemsSource = @(for ($i = 0; $i -lt $buttons.Count; $i++) {
+    $all = @(for ($i = 0; $i -lt $buttons.Count; $i++) {
         $b = $buttons[$i]; $m = $S.Matches[$i]; $on = $live -contains $i
         $key = if ($b.Shortcut) { "Ctrl+$("$($b.Shortcut)".ToUpper())" } else { "Ctrl+$($i + 1)" }
         switch ($b.Type) {   # buttons of any other type are not set up yet: hidden
@@ -526,7 +550,21 @@ function Render {
                 New-Row $i $icons.sheet "Ouvrir $($b.Label)" $sub $on $key
             }
         }
+    }
+    for ($j = 0; $j -lt $S.Files.Count; $j++) {   # then the folder's own files, by type (icon only)
+        $f = $S.Files[$j]
+        $t = Get-FileType $f
+        $ico = if ($t -lt $fileTypes.Count) { $fileTypes[$t].Icon } else { 'file' }
+        New-Row ($buttons.Count + $j) $icons[$ico] $f.Name $f.LastWriteTime.ToString('yyyy-MM-dd') $true ''
     })
+    # show $pickRows lines around the selection
+    $pos = 0; for ($k = 0; $k -lt $all.Count; $k++) { if ($all[$k].I -eq $S.Sel) { $pos = $k } }
+    $first = [math]::Max(0, [math]::Min($pos - 3, $all.Count - $pickRows))
+    $shown = @($all | Select-Object -Skip $first -First $pickRows)
+    $where = if ($all.Count -gt $pickRows) { "lignes $($first + 1)-$($first + $shown.Count) sur $($all.Count) (↑↓ pour défiler)" } else { '' }
+    if ($S.FolderPick) { Set-Message (@('Échap pour revenir à la liste des dossiers', $where) -ne '' -join ' · ') }
+    elseif ($S.Folder) { Set-Message $where }
+    $Rows.ItemsSource = $shown
 }
 
 function Update-FromInput {
@@ -547,10 +585,11 @@ function Update-FromInput {
     Select-Folder $S.Folder
 }
 
-function Select-Folder($folder) {   # looks for the buttons' files in the chosen folder, then shows the buttons
+function Select-Folder($folder) {   # reads the chosen folder's files, finds the buttons' files among them, then shows both
     $S.Folder = $folder
     $S.Matches = @{}
-    if ($folder) { for ($i = 0; $i -lt $buttons.Count; $i++) { if ($buttons[$i].Type -eq 'file') { $S.Matches[$i] = Find-Files $folder $buttons[$i] } } }
+    $S.Files = @(if ($folder) { Get-FolderFiles $folder })
+    if ($folder) { for ($i = 0; $i -lt $buttons.Count; $i++) { if ($buttons[$i].Type -eq 'file') { $S.Matches[$i] = @(Find-Files $S.Files $buttons[$i]) } } }
     $S.Sel = (@(Get-Live) + -1)[0]
     Render
 }
@@ -808,6 +847,7 @@ function Invoke-Row($i) {
     }
     if ($S.Pick) { return Open-Target $S.Pick[$i].FullName }
     if (@(Get-Live) -notcontains $i) { return }
+    if ($i -ge $buttons.Count) { return Open-Target $S.Files[$i - $buttons.Count].FullName }   # one of the folder's files
     $m = @($S.Matches[$i])
     if ($buttons[$i].Type -eq 'folder') { Open-Target $S.Folder.FullName }
     elseif ($m.Count -eq 1) { Open-Target $m[0].FullName }
@@ -846,7 +886,7 @@ function Complete-Capture($candidate, [switch]$Reset) {
 # ---------------------------------------------------------------- events
 $Box.Add_TextChanged({ Update-FromInput })
 $Rows.Add_MouseLeftButtonUp({ param($src, $e) $d = $e.OriginalSource.DataContext; if ($d.On) { Invoke-Row $d.I } })
-$Rows.Add_PreviewMouseWheel({ param($src, $e) if ($S.Pick) { $e.Handled = $true; Move-Sel $(if ($e.Delta -gt 0) { -1 } else { 1 }) } })   # scroll long lists
+$Rows.Add_PreviewMouseWheel({ param($src, $e) if ($S.Pick -or $S.Folder) { $e.Handled = $true; Move-Sel $(if ($e.Delta -gt 0) { -1 } else { 1 }) } })   # scroll long lists
 $Links.Add_MouseLeftButtonUp({ param($src, $e) $d = $e.OriginalSource.DataContext; if ($d.Path) { Open-Target $d.Path } })
 $MyLinks.Add_MouseLeftButtonUp({ param($src, $e) $d = $e.OriginalSource.DataContext; if ($d.Path) { Open-Target $d.Path } })
 $MyLinks.Add_MouseRightButtonUp({
