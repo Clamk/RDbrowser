@@ -2,7 +2,7 @@
 #   Setup.cmd / Uninstall.cmd : installe (copie locale + démarrage à la connexion) / désinstalle.
 #   Raccourci global (Hotkey du fichier de réglages, ou celui choisi sur ce PC) : ouvre la barre.
 #   Entrée = action surlignée, Haut/Bas = déplacer, Ctrl+lettre/chiffre = actions, Alt+1..6 = liens, Alt+7..0 = mes liens, Échap = masquer.
-#   Recherche : un numéro (7, RD007) = dossier RD dans RootPath ; des lettres + un numéro (ALP2) = dossier projet dans ProjectsPath.
+#   Recherche : un numéro (7, RD007) = dossier RD dans RootPath ; des lettres + un numéro (ALP2) = dossier projet dans ProjectsPath ; des lettres seules (ALP) = liste de ces projets.
 #   Mes liens : chacun ajoute ses propres liens avec « Ajouter un lien » (enregistrés sur ce PC, dans mes_liens.json).
 #   Réglages : RD_Browser.config.json (relu à chaque ouverture). Mise à jour : copie partagée adoptée au démarrage si elle est valide.
 param([switch]$Install, [switch]$Uninstall, [string]$SourceDir, [switch]$Welcome)
@@ -110,6 +110,8 @@ function Get-Query($text) {
         $letters = $Matches[1].ToUpper(); $number = [int]$Matches[2]
         return @{ Kind = 'project'; Letters = $letters; Number = $number; Label = '{0}{1:D3}' -f $letters, $number }
     }
+    # letters only (2 or more, not "RD" which is on its way to an RD number) = list every project with that code
+    if ($t -match '^[a-z]{2,8}$' -and $t -ne 'rd') { return @{ Kind = 'project'; Letters = $t.ToUpper(); Number = $null; Label = $t.ToUpper() } }
 }
 
 function Find-RdFolder($rd) {
@@ -491,18 +493,21 @@ function Render {
     $RdName.SetResourceReference($fg, $(if ($ok) { 'Text' } else { 'Error' }))
     $RdPath.Text = if ($S.Folder) { $S.Folder.FullName } else { "dans $($S.Where)" }
     $live = @(Get-Live)
-    if ($pickingFolder) {
-        Set-Message "$($S.Pick.Count) dossiers trouvés pour $($S.Rd) - choisissez-en un"
-        $Rows.ItemsSource = @(for ($i = 0; $i -lt $S.Pick.Count; $i++) {
-            New-Row $i $icons.folder $S.Pick[$i].Name $S.Pick[$i].Enterprise $true ''
-        })
-        return
-    }
-    if ($S.Pick) {
-        Set-Message "$($S.Pick.Count) fichiers $($S.PickLabel) trouvés - choisissez-en un (Échap pour revenir)"
-        $Rows.ItemsSource = @(for ($i = 0; $i -lt $S.Pick.Count; $i++) {
-            New-Row $i $icons.sheet $S.Pick[$i].Name $S.Pick[$i].LastWriteTime.ToString('yyyy-MM-dd HH:mm') $true ''
-        })
+    if ($S.Pick) {   # a list to choose from: folders (several projects) or files (several Manip...)
+        $n = $S.Pick.Count
+        $first = [math]::Max(0, [math]::Min($S.Sel - 3, $n - $pickRows))   # show $pickRows lines around the selection
+        $last  = [math]::Min($n, $first + $pickRows) - 1
+        $where = if ($n -gt $pickRows) { " · lignes $($first + 1)-$($last + 1) sur $n (↑↓ pour défiler)" } else { '' }
+        if ($pickingFolder) {
+            Set-Message $(if ($S.PickTotal -gt $n) { "$($S.PickTotal) dossiers trouvés pour $($S.Rd) - les $n premiers ici. Ajoutez le numéro pour les autres (ex. $($S.Rd)45)$where" }
+                          else { "$n dossiers trouvés pour $($S.Rd) - choisissez-en un$where" })
+            $Rows.ItemsSource = @(for ($i = $first; $i -le $last; $i++) { New-Row $i $icons.folder $S.Pick[$i].Name $S.Pick[$i].Enterprise $true '' })
+        } else {
+            Set-Message "$n fichiers $($S.PickLabel) trouvés - choisissez-en un (Échap pour revenir)$where"
+            $Rows.ItemsSource = @(for ($i = $first; $i -le $last; $i++) {
+                New-Row $i $icons.sheet $S.Pick[$i].Name $S.Pick[$i].LastWriteTime.ToString('yyyy-MM-dd HH:mm') $true ''
+            })
+        }
         return
     }
     $hint = if ($projRoot) { 'Tapez un numéro de RD (par ex. 7 ou RD007) ou un code projet (par ex. ALP2)' } else { 'Tapez un numéro de RD, par ex. 7 ou RD007' }
@@ -536,7 +541,7 @@ function Update-FromInput {
             $found = @(Find-Projects $q)
             if ($null -eq $projIndex) { $S.Loading = $true; Start-ProjectScan }
             elseif ($found.Count -eq 1) { $S.Folder = $found[0] }
-            elseif ($found.Count -gt 1) { $S.Pick = $found; $S.PickKind = 'folder' }
+            elseif ($found.Count -gt 1) { $S.Pick = @($found | Select-Object -First $projListMax); $S.PickKind = 'folder'; $S.PickTotal = $found.Count }
         }
     }
     Select-Folder $S.Folder
@@ -749,10 +754,16 @@ function Update-ProjectIndex {   # on opening the bar: forget the list if the lo
     if ($projRoot -and ((Get-Date) - $projStamp).TotalSeconds -gt 60) { Start-ProjectScan }
 }
 
-function Find-Projects($q) {   # ALP2 matches ALP2, ALP002, ALP-002, "Essai ALP002"; not XALP002 or ALP0021
-    $rx = '(?<![a-z])' + [regex]::Escape($q.Letters) + '[\s_-]*0*' + $q.Number + '(?!\d)'
-    @($projIndex | Where-Object { $_.Name -match $rx })
+# ALP2 matches ALP2, ALP002, ALP-002, "Essai ALP002"; not XALP002 or ALP0021.
+# ALP alone matches every folder with an ALP code (ALP001, ALP002 ...), sorted by number.
+function Find-Projects($q) {
+    $code = '(?<![a-z])' + [regex]::Escape($q.Letters) + '[\s_-]*'
+    $rx = if ($null -eq $q.Number) { $code + '(\d+)' } else { $code + '0*' + $q.Number + '(?!\d)' }
+    @($projIndex | Where-Object { $_.Name -match $rx } |
+        Sort-Object @{ Expression = { [long][regex]::Match($_.Name, $code + '(\d+)', 'IgnoreCase').Groups[1].Value } }, Name)
 }
+$projListMax = 30   # longest list of folders; beyond that, the person is asked to type the number
+$pickRows = 8       # lines of a list shown at once (the bar would not fit on screen otherwise)
 
 # ---------------------------------------------------------------- actions
 function Hide-Bar {
@@ -835,6 +846,7 @@ function Complete-Capture($candidate, [switch]$Reset) {
 # ---------------------------------------------------------------- events
 $Box.Add_TextChanged({ Update-FromInput })
 $Rows.Add_MouseLeftButtonUp({ param($src, $e) $d = $e.OriginalSource.DataContext; if ($d.On) { Invoke-Row $d.I } })
+$Rows.Add_PreviewMouseWheel({ param($src, $e) if ($S.Pick) { $e.Handled = $true; Move-Sel $(if ($e.Delta -gt 0) { -1 } else { 1 }) } })   # scroll long lists
 $Links.Add_MouseLeftButtonUp({ param($src, $e) $d = $e.OriginalSource.DataContext; if ($d.Path) { Open-Target $d.Path } })
 $MyLinks.Add_MouseLeftButtonUp({ param($src, $e) $d = $e.OriginalSource.DataContext; if ($d.Path) { Open-Target $d.Path } })
 $MyLinks.Add_MouseRightButtonUp({
