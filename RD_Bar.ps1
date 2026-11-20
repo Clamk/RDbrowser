@@ -521,6 +521,19 @@ $icons = @{}
     image  = 'M5,3 L19,3 A2,2 0 0 1 21,5 L21,19 A2,2 0 0 1 19,21 L5,21 A2,2 0 0 1 3,19 L3,5 A2,2 0 0 1 5,3 Z M10,9 A1.5,1.5 0 1 1 7,9 A1.5,1.5 0 1 1 10,9 Z M21,15 L16,10 L5,21'
     file   = 'M14,3 L7,3 A2,2 0 0 0 5,5 L5,19 A2,2 0 0 0 7,21 L17,21 A2,2 0 0 0 19,19 L19,8 Z M14,3 L14,8 L19,8'
     rein   = $kidneyPath   # kidney with calyces (also the application icon)
+    # quick-link icons from the Lucide set (lucide.dev, ISC licence), redrawn as single paths
+    horloge     = 'M 22 12 A 10 10 0 1 1 2 12 A 10 10 0 1 1 22 12 Z M 12 6 v 6 l 4 2'
+    calendrier  = 'M 8 2 v 3 M 16 2 v 3 M 5 3 H 19 A 2 2 0 0 1 21 5 V 19 A 2 2 0 0 1 19 21 H 5 A 2 2 0 0 1 3 19 V 5 A 2 2 0 0 1 5 3 Z M 3 9 h 18'
+    fiole       = 'M 14 2 v 6 a 2 2 0 0 0 .245 .96 l 5.51 10.08 A 2 2 0 0 1 18 22 H 6 a 2 2 0 0 1 -1.755 -2.96 l 5.51 -10.08 A 2 2 0 0 0 10 8 V 2 M 6.453 15 h 11.094 M 8.5 2 h 7'
+    microscope  = 'M 6 18 h 8 M 3 22 h 18 M 14 22 a 7 7 0 1 0 0 -14 h -1 M 9 14 h 2 M 9 12 a 2 2 0 0 1 -2 -2 V 6 h 6 v 4 a 2 2 0 0 1 -2 2 Z M 12 6 V 3 a 1 1 0 0 0 -1 -1 H 9 a 1 1 0 0 0 -1 1 v 3'
+    thermometre = 'M 14 4 v 10.54 a 4 4 0 1 1 -4 0 V 4 a 2 2 0 0 1 4 0 Z'
+    congelateur = 'M 10 20 l -1.25 -2.5 L 6 18 M 10 4 L 8.75 6.5 L 6 6 M 14 20 l 1.25 -2.5 L 18 18 M 14 4 l 1.25 2.5 L 18 6 M 17 21 l -3 -6 h -4 M 17 3 l -3 6 l 1.5 3 M 2 12 h 6.5 L 10 9 M 20 10 l -1.5 2 l 1.5 2 M 22 12 h -6.5 L 14 15 M 4 10 l 1.5 2 L 4 14 M 7 21 l 3 -6 l -1.5 -3 M 7 3 l 3 6 h 4'
+    pipette     = 'M 12 9 l -8.414 8.414 A 2 2 0 0 0 3 18.828 v 1.344 a 2 2 0 0 1 -.586 1.414 A 2 2 0 0 1 3.828 21 h 1.344 a 2 2 0 0 0 1.414 -.586 L 15 12 M 18 9 l .4 .4 a 1 1 0 1 1 -3 3 l -3.8 -3.8 a 1 1 0 1 1 3 -3 l .4 .4 l 3.4 -3.4 a 1 1 0 1 1 3 3 z M 2 22 l .414 -.414'
+    tube        = 'M 14.5 2 v 17.5 c 0 1.4 -1.1 2.5 -2.5 2.5 c -1.4 0 -2.5 -1.1 -2.5 -2.5 V 2 M 8.5 2 h 7 M 14.5 16 h -5'
+    seringue    = 'M 18 2 l 4 4 M 17 7 l 3 -3 M 19 9 L 8.7 19.3 c -1 1 -2.5 1 -3.4 0 l -.6 -.6 c -1 -1 -1 -2.5 0 -3.4 L 15 5 M 9 11 l 4 4 M 5 19 l -3 3 M 14 4 l 6 6'
+    planning    = 'M 16 14 v 2.2 l 1.6 1 M 16 4 h 2 a 2 2 0 0 1 2 2 v .832 M 8 4 H 6 a 2 2 0 0 0 -2 2 v 14 a 2 2 0 0 0 2 2 h 2 M 22 16 A 6 6 0 1 1 10 16 A 6 6 0 1 1 22 16 Z M 9 2 H 15 A 1 1 0 0 1 16 3 V 5 A 1 1 0 0 1 15 6 H 9 A 1 1 0 0 1 8 5 V 3 A 1 1 0 0 1 9 2 Z'
+    liste       = 'M 9 2 H 15 A 1 1 0 0 1 16 3 V 5 A 1 1 0 0 1 15 6 H 9 A 1 1 0 0 1 8 5 V 3 A 1 1 0 0 1 9 2 Z M 16 4 h 2 a 2 2 0 0 1 2 2 v 14 a 2 2 0 0 1 -2 2 H 6 a 2 2 0 0 1 -2 -2 V 6 a 2 2 0 0 1 2 -2 h 2 M 12 11 h 4 M 12 16 h 4 M 8 11 h .01 M 8 16 h .01'
+    equipe      = 'M 16 21 v -2 a 4 4 0 0 0 -4 -4 H 6 a 4 4 0 0 0 -4 4 v 2 M 16 3.128 a 4 4 0 0 1 0 7.744 M 22 21 v -2 a 4 4 0 0 0 -3 -3.87 M 13 7 A 4 4 0 1 1 5 7 A 4 4 0 1 1 13 7 Z'
     box    = 'M21,8 L12,3 L3,8 L3,16 L12,21 L21,16 Z M3,8 L12,13 L21,8 M12,13 L12,21'
     moon   = 'M21,12.79 A9,9 0 1 1 11.21,3 A7,7 0 0 0 21,12.79 Z'
     sun    = 'M16,12 A4,4 0 1 1 8,12 A4,4 0 1 1 16,12 Z M12,2 L12,4 M12,20 L12,22 M4.93,4.93 L6.34,6.34 M17.66,17.66 L19.07,19.07 M2,12 L4,12 M20,12 L22,12 M4.93,19.07 L6.34,17.66 M17.66,6.34 L19.07,4.93'
@@ -531,7 +544,8 @@ $icons = @{}
 $window.FindName('KeyIco').Data = $icons.key
 $window.FindName('CogIco').Data = $icons.cog
 $window.FindName('PaletteIco').Data = $icons.palette
-$linkIcons = @{ calculatrice = 'calc'; document = 'doc'; carton = 'box'; tableau = 'sheet'; web = 'globe'; dossier = 'folder'; rein = 'rein' }
+$linkIcons = @{ calculatrice = 'calc'; document = 'doc'; carton = 'box'; tableau = 'sheet'; web = 'globe'; dossier = 'folder'; rein = 'rein'
+               horloge = 'horloge'; calendrier = 'calendrier'; fiole = 'fiole'; microscope = 'microscope'; thermometre = 'thermometre'; congelateur = 'congelateur'; pipette = 'pipette'; tube = 'tube'; seringue = 'seringue'; planning = 'planning'; liste = 'liste'; equipe = 'equipe' }
 
 # ---------------------------------------------------------------- colours (each PC remembers its mode and scheme; first time follows Windows, scheme Sarcelle)
 # Each scheme: id saved in scheme.txt, name shown in the picker, accent tint of the window surface,
