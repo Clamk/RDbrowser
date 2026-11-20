@@ -2,7 +2,7 @@
 #   Setup.cmd / Uninstall.cmd : installe (copie locale + démarrage à la connexion) / désinstalle.
 #   Raccourci global (Hotkey du fichier de réglages, ou celui choisi sur ce PC) : ouvre la barre.
 #   Entrée = action surlignée, Haut/Bas = déplacer, Ctrl+lettre/chiffre = actions, Alt+1..6 = liens, Alt+7..0 = mes liens, Échap = masquer.
-#   Recherche : un numéro (7, RD007) = dossier RD dans RootPath ; des lettres + un numéro (ALP2) = dossier projet dans ProjectsPath ; des lettres seules (AL, ALP) = liste des projets dont le code commence ainsi.
+#   Recherche : un numéro (7, RD007) = dossier RD dans RDPath ; des lettres + un numéro (ALP2) = dossier projet dans ClientPath ; des lettres seules (AL, ALP) = liste des projets dont le code commence ainsi.
 #   Dossier trouvé : une rangée de tuiles (Dossier, Manip, Study Plan, Rapport final : Ctrl+D/M/S/R), puis les fichiers à sa racine
 #   rangés par type (Excel, Word, PDF, PowerPoint, images, autres). Entrée sans fichier surligné = ouvrir le dossier.
 #   Mes liens : chacun ajoute ses propres liens avec « Ajouter un lien » (enregistrés sur ce PC, dans mes_liens.json).
@@ -37,9 +37,12 @@ function Read-Config {
             [pscustomobject]@{ Label = 'Dossier'; Type = 'folder' },
             [pscustomobject]@{ Label = 'Manip'; Type = 'file'; Pattern = 'manip'; Shortcut = 'M' }) }
     }
-    $script:root    = [IO.Path]::GetFullPath([IO.Path]::Combine($SourceDir, "$($config.RootPath)"))
-    # Optional second location: enterprise folders, each holding project folders named with letters + a number (e.g. ALP002)
-    $script:projRoot = if ("$($config.ProjectsPath)".Trim()) { [IO.Path]::GetFullPath([IO.Path]::Combine($SourceDir, "$($config.ProjectsPath)".Trim())) }
+    # RDPath: where RD001, RD002 ... are. ClientPath (optional): enterprise folders, each holding project folders (e.g. ALP002).
+    # The former names RootPath and ProjectsPath are still read, so an older settings file keeps working.
+    $rdSetting     = if ($null -ne $config.RDPath) { "$($config.RDPath)" } else { "$($config.RootPath)" }
+    $clientSetting = if ($null -ne $config.ClientPath) { "$($config.ClientPath)" } else { "$($config.ProjectsPath)" }
+    $script:root     = [IO.Path]::GetFullPath([IO.Path]::Combine($SourceDir, $rdSetting))
+    $script:projRoot = if ($clientSetting.Trim()) { [IO.Path]::GetFullPath([IO.Path]::Combine($SourceDir, $clientSetting.Trim())) }
     $script:buttons = @($config.Buttons)
     $script:defaultHotkey = if ($config.Hotkey) { "$($config.Hotkey)" } else { 'Ctrl+Alt+F' }
     $own = Get-Content -LiteralPath $hotkeyFile -EA 0 | Select-Object -First 1
@@ -808,7 +811,7 @@ $editMenu = New-Menu @(
     , @('Supprimer', { Edit-MyLink 'remove' })
 )
 
-# ---------------------------------------------------------------- project folders (ProjectsPath): list kept up to date in the background
+# ---------------------------------------------------------------- project folders (ClientPath): list kept up to date in the background
 # Reading 50-300 enterprise folders on the NAS takes seconds, so it is done out of sight; typing then only searches the list.
 $projIndex = $null; $projIndexRoot = $null; $projFail = $false; $projJob = $null; $projStamp = [datetime]::MinValue
 

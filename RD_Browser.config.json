@@ -1,16 +1,16 @@
 {
-  "RootPath_AIDE": [
-    "RootPath : l'endroit où se trouvent les dossiers RD001, RD002, etc.",
+  "RDPath_AIDE": [
+    "RDPath : l'endroit où se trouvent les dossiers RD001, RD002, etc.",
     "  ..                         = le dossier juste au-dessus de ce dossier RD Browser (réglage actuel)",
     "  \\\\serveur\\partage\\RD    = un chemin complet (chaque \\ tapée deux fois)",
     "Hotkey : le raccourci clavier par défaut pour tout le monde (pris en compte au prochain démarrage).",
     "         Chacun peut le changer pour son propre PC avec le bouton clavier, en bas à gauche de la barre."
   ],
-  "RootPath": "..",
+  "RDPath": "..",
   "Hotkey": "Ctrl+Alt+F",
 
-  "ProjectsPath_AIDE": [
-    "ProjectsPath : (facultatif) un second endroit où chercher, rangé par entreprise.",
+  "ClientPath_AIDE": [
+    "ClientPath : (facultatif) un second endroit où chercher, rangé par entreprise (client).",
     "  Il contient un dossier par entreprise, et dans chacun des dossiers projet dont le nom contient un code : quelques lettres puis un numéro.",
     "  Exemple : \\\\serveur\\partage\\Clients  ->  Alpha Pharma\\ALP002 Stabilité",
     "  Dans la barre, tapez le code : ALP2, alp 002 ou ALP002 trouvent le même dossier (les zéros ne comptent pas).",
@@ -19,7 +19,7 @@
     "  Laissez vide (deux guillemets, rien entre les deux) pour ne pas utiliser ce second endroit.",
     "  La liste des projets est relue en arrière-plan : un dossier tout juste créé apparaît dans la minute."
   ],
-  "ProjectsPath": "",
+  "ClientPath": "",
 
   "QuickLinks_AIDE": [
     "LIENS RAPIDES = les 6 boutons AU-DESSUS de la barre de recherche. Ils ouvrent toujours le même endroit, quel que soit le numéro de RD tapé.",
