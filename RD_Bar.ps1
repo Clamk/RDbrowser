@@ -2,7 +2,7 @@
 #   Setup.cmd / Uninstall.cmd : installe (copie locale + démarrage à la connexion) / désinstalle.
 #   Raccourci global (Hotkey du fichier de réglages, ou celui choisi sur ce PC) : ouvre la barre.
 #   Entrée = action surlignée, Haut/Bas = déplacer, Ctrl+lettre/chiffre = actions, Alt+1..6 = liens, Alt+7..0 = mes liens, Échap = masquer.
-#   Recherche : un numéro (7, RD007) = dossier RD dans RootPath ; des lettres + un numéro (ALP2) = dossier projet dans ProjectsPath ; des lettres seules (ALP) = liste de ces projets.
+#   Recherche : un numéro (7, RD007) = dossier RD dans RootPath ; des lettres + un numéro (ALP2) = dossier projet dans ProjectsPath ; des lettres seules (AL, ALP) = liste des projets dont le code commence ainsi.
 #   Dossier trouvé : une rangée de tuiles (Dossier, Manip, Study Plan, Rapport final : Ctrl+D/M/S/R), puis les fichiers à sa racine
 #   rangés par type (Excel, Word, PDF, PowerPoint, images, autres). Entrée sans fichier surligné = ouvrir le dossier.
 #   Mes liens : chacun ajoute ses propres liens avec « Ajouter un lien » (enregistrés sur ce PC, dans mes_liens.json).
@@ -850,12 +850,14 @@ function Update-ProjectIndex {   # on opening the bar: forget the list if the lo
 }
 
 # ALP2 matches ALP2, ALP002, ALP-002, "Essai ALP002"; not XALP002 or ALP0021.
-# ALP alone matches every folder with an ALP code (ALP001, ALP002 ...), sorted by number.
+# Letters alone match every code starting with them: AL finds ALP001, ALP002, ALB003 ... sorted by code, then number.
 function Find-Projects($q) {
-    $code = '(?<![a-z])' + [regex]::Escape($q.Letters) + '[\s_-]*'
-    $rx = if ($null -eq $q.Number) { $code + '(\d+)' } else { $code + '0*' + $q.Number + '(?!\d)' }
+    $start = '(?<![a-z])' + [regex]::Escape($q.Letters)
+    $any = $start + '([a-z]{0,6})[\s_-]*(\d+)'   # a code starting with the letters: rest of its letters, then its number
+    $rx = if ($null -eq $q.Number) { $any } else { $start + '[\s_-]*0*' + $q.Number + '(?!\d)' }
     @($projIndex | Where-Object { $_.Name -match $rx } |
-        Sort-Object @{ Expression = { [long][regex]::Match($_.Name, $code + '(\d+)', 'IgnoreCase').Groups[1].Value } }, Name)
+        Sort-Object @{ Expression = { [regex]::Match($_.Name, $any, 'IgnoreCase').Groups[1].Value } },
+                    @{ Expression = { [long][regex]::Match($_.Name, $any, 'IgnoreCase').Groups[2].Value } }, Name)
 }
 $projListMax = 30   # longest list of folders; beyond that, the person is asked to type the number
 $pickRows = 8       # lines of a list shown at once (the bar would not fit on screen otherwise)

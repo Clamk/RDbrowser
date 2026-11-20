@@ -14,7 +14,7 @@
     "  Il contient un dossier par entreprise, et dans chacun des dossiers projet dont le nom contient un code : quelques lettres puis un numéro.",
     "  Exemple : \\\\serveur\\partage\\Clients  ->  Alpha Pharma\\ALP002 Stabilité",
     "  Dans la barre, tapez le code : ALP2, alp 002 ou ALP002 trouvent le même dossier (les zéros ne comptent pas).",
-    "  Les lettres seules (ALP) listent tous les projets de ce code, par numéro : choisissez avec Haut/Bas puis Entrée.",
+    "  Les lettres seules (2 ou plus : AL, ALP) listent les projets dont le code commence ainsi, par code puis numéro : choisissez avec Haut/Bas puis Entrée.",
     "  Un numéro seul (7, RD007) cherche toujours dans les dossiers RD.",
     "  Laissez vide (deux guillemets, rien entre les deux) pour ne pas utiliser ce second endroit.",
     "  La liste des projets est relue en arrière-plan : un dossier tout juste créé apparaît dans la minute."
