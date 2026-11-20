@@ -279,8 +279,9 @@ $window = [Windows.Markup.XamlReader]::Parse(@'
       <Border.Effect><DropShadowEffect BlurRadius="28" ShadowDepth="6" Opacity="0.35"/></Border.Effect>
       <Grid>
         <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="180"/></Grid.ColumnDefinitions>
+        <Grid.RowDefinitions><RowDefinition/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
 
-        <!-- Search box (accent underline), RD header, message line, actions (actions share the remaining height) -->
+        <!-- Search box (accent underline), RD header, action tiles, list of files or folders -->
         <Grid Margin="14,14,12,10">
           <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition/></Grid.RowDefinitions>
           <Grid Height="44">
@@ -304,7 +305,6 @@ $window = [Windows.Markup.XamlReader]::Parse(@'
             <TextBlock x:Name="RdName" FontSize="15" FontWeight="Bold"/>
             <TextBlock x:Name="RdPath" FontSize="12" Margin="10,0,0,1" VerticalAlignment="Bottom" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource Muted}"/>
           </DockPanel>
-          <TextBlock x:Name="Message" Grid.Row="2" Margin="4,10,4,0" FontSize="13" TextWrapping="Wrap"/>
           <!-- Action tiles (Dossier, Manip, ...): one row of buttons for the found folder; greyed when there is nothing to open -->
           <ItemsControl x:Name="Tiles" Grid.Row="3" Margin="-3,10,-3,0">
             <ItemsControl.ItemsPanel><ItemsPanelTemplate><UniformGrid Rows="1"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
@@ -383,16 +383,10 @@ $window = [Windows.Markup.XamlReader]::Parse(@'
           </ItemsControl>
         </Grid>
 
-        <!-- Links rail: quick links, tool buttons at the bottom, colour picker shown above the tools -->
-        <Border Grid.Column="1" Background="{DynamicResource Side}" BorderBrush="{DynamicResource Line}" BorderThickness="1,0,0,0" CornerRadius="0,8,8,0">
+        <!-- Links rail: quick links and Mes liens (stops at the footer; the colour picker opens just above it) -->
+        <Border Grid.Column="1" Background="{DynamicResource Side}" BorderBrush="{DynamicResource Line}" BorderThickness="1,0,0,0" CornerRadius="0,8,0,0">
           <Grid>
             <DockPanel Margin="8,14,8,8">
-              <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,8,0,0">
-                <Border x:Name="ThemeBtn" Style="{StaticResource Tool}"><Path x:Name="ThemeIco" Style="{StaticResource Ico}" Width="18" Height="18"/></Border>
-                <Border x:Name="PaletteBtn" Style="{StaticResource Tool}" ToolTip="Changer les couleurs"><Path x:Name="PaletteIco" Style="{StaticResource Ico}" Width="18" Height="18"/></Border>
-                <Border x:Name="KeyBtn" Style="{StaticResource Tool}"><Path x:Name="KeyIco" Style="{StaticResource Ico}" Width="18" Height="18"/></Border>
-                <Border x:Name="Cog" Style="{StaticResource Tool}" ToolTip="Ouvrir les fichiers de RD Browser (réglages, scripts)"><Path x:Name="CogIco" Style="{StaticResource Ico}" Width="18" Height="18"/></Border>
-              </StackPanel>
               <StackPanel>
                 <TextBlock x:Name="LinksTitle" Text="Liens rapides" FontSize="12" FontWeight="SemiBold" Margin="8,0,0,6" Foreground="{DynamicResource Text}"/>
                 <ItemsControl x:Name="Links" ItemTemplate="{StaticResource LinkTpl}"/>
@@ -407,7 +401,7 @@ $window = [Windows.Markup.XamlReader]::Parse(@'
                 </Border>
               </StackPanel>
             </DockPanel>
-            <Border x:Name="Picker" Visibility="Collapsed" VerticalAlignment="Bottom" Margin="8,0,8,50" Padding="10,8,10,8" CornerRadius="8" BorderThickness="1"
+            <Border x:Name="Picker" Visibility="Collapsed" VerticalAlignment="Bottom" Margin="8,0,8,8" Padding="10,8,10,8" CornerRadius="8" BorderThickness="1"
                     Background="{DynamicResource Box}" BorderBrush="{DynamicResource CardLine}">
               <Border.Effect><DropShadowEffect BlurRadius="16" ShadowDepth="3" Opacity="0.25"/></Border.Effect>
               <StackPanel>
@@ -435,6 +429,17 @@ $window = [Windows.Markup.XamlReader]::Parse(@'
             </Border>
           </Grid>
         </Border>
+
+        <!-- Footer across the whole bar: a separator line, the message on the left, the tool buttons on the right -->
+        <Border Grid.Row="1" Grid.Column="1" Background="{DynamicResource Side}" BorderBrush="{DynamicResource Line}" BorderThickness="1,0,0,0" CornerRadius="0,0,8,0"/>
+        <Border Grid.Row="1" Grid.ColumnSpan="2" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource Line}"/>
+        <TextBlock x:Name="Message" Grid.Row="1" Margin="18,6,12,6" VerticalAlignment="Center" FontSize="12" TextWrapping="Wrap"/>
+        <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" Margin="8">
+          <Border x:Name="ThemeBtn" Style="{StaticResource Tool}"><Path x:Name="ThemeIco" Style="{StaticResource Ico}" Width="18" Height="18"/></Border>
+          <Border x:Name="PaletteBtn" Style="{StaticResource Tool}" ToolTip="Changer les couleurs"><Path x:Name="PaletteIco" Style="{StaticResource Ico}" Width="18" Height="18"/></Border>
+          <Border x:Name="KeyBtn" Style="{StaticResource Tool}"><Path x:Name="KeyIco" Style="{StaticResource Ico}" Width="18" Height="18"/></Border>
+          <Border x:Name="Cog" Style="{StaticResource Tool}" ToolTip="Ouvrir les fichiers de RD Browser (réglages, scripts)"><Path x:Name="CogIco" Style="{StaticResource Ico}" Width="18" Height="18"/></Border>
+        </StackPanel>
       </Grid>
     </Border>
   </Grid>
