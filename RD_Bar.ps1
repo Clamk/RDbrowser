@@ -587,7 +587,7 @@ function Render {
         }
         return
     }
-    $hint = if ($projRoot) { 'Tapez un numéro de RD (par ex. 7 ou RD007) ou un code projet (par ex. ALP2)' } else { 'Tapez un numéro de RD, par ex. 7 ou RD007' }
+    $hint = if ($projRoot) { 'Tapez un numéro de RD ou un code projet' } else { 'Tapez un numéro de RD' }
     if (-not $S.Rd) { Set-Message $hint }
     elseif ($S.Loading) { Set-Message 'Chargement de la liste des projets…' }
     elseif ($S.Kind -eq 'project' -and $projFail) { Set-Message "Emplacement des projets inaccessible : $projRoot" -IsError }
