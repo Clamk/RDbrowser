@@ -6,7 +6,7 @@
 #   Dossier trouvé : une rangée de tuiles (Dossier, Manip, Study Plan, Rapport final : Ctrl+D/M/S/R), puis les fichiers à sa racine
 #   rangés par type (Excel, Word, PDF, PowerPoint, images, autres). Entrée sans fichier surligné = ouvrir le dossier.
 #   Mes liens : chacun ajoute ses propres liens avec « Ajouter un lien » (enregistrés sur ce PC, dans mes_liens.json).
-#   Réglages : RD_Browser.config.json (relu à chaque ouverture). Mise à jour : copie partagée adoptée au démarrage si elle est valide.
+#   Réglages : RD_Browser.config.json (relu à chaque ouverture) ; leurs explications : Aide_reglages.txt. Mise à jour : copie partagée adoptée au démarrage si elle est valide.
 param([switch]$Install, [switch]$Uninstall, [string]$SourceDir, [switch]$Welcome)
 
 $scriptDir = $PSScriptRoot
