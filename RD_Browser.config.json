@@ -30,7 +30,7 @@
     "       Exemple web     : https://intranet.exemple.fr",
     "       IMPORTANT : chaque barre oblique inverse \\ doit être tapée deux fois, exactement comme dans les exemples.",
     "Laissez Path vide (deux guillemets, rien entre les deux) : le lien reste caché jusqu'à ce qu'il ait une adresse.",
-    "Icon : (facultatif) dossier, web, document, tableau, carton ou calculatrice.",
+    "Icon : (facultatif) dossier, web, document, tableau, carton, calculatrice ou rein.",
     "       Sans Icon : un globe pour les adresses web, un dossier pour le reste.",
     "Clavier : Alt+1 à Alt+6 ouvrent les liens 1 à 6."
   ],

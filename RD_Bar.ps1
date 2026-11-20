@@ -453,6 +453,7 @@ $icons = @{}
     slides = 'M4,4 L20,4 A1,1 0 0 1 21,5 L21,16 A1,1 0 0 1 20,17 L4,17 A1,1 0 0 1 3,16 L3,5 A1,1 0 0 1 4,4 Z M12,17 L12,21 M8,21 L16,21'
     image  = 'M5,3 L19,3 A2,2 0 0 1 21,5 L21,19 A2,2 0 0 1 19,21 L5,21 A2,2 0 0 1 3,19 L3,5 A2,2 0 0 1 5,3 Z M10,9 A1.5,1.5 0 1 1 7,9 A1.5,1.5 0 1 1 10,9 Z M21,15 L16,10 L5,21'
     file   = 'M14,3 L7,3 A2,2 0 0 0 5,5 L5,19 A2,2 0 0 0 7,21 L17,21 A2,2 0 0 0 19,19 L19,8 Z M14,3 L14,8 L19,8'
+    rein   = 'M13,3 C17.5,3 20,7 20,12 C20,17 17.5,21 13,21 C9,21 6,19 6,16 C6,14 8,13.5 8,12 C8,10.5 6,10 6,8 C6,5 9,3 13,3 Z M8,12 L11.5,12 L15,8.5 M11.5,12 L16,12 M11.5,12 L15,15.5'   # kidney with calyces
     box    = 'M21,8 L12,3 L3,8 L3,16 L12,21 L21,16 Z M3,8 L12,13 L21,8 M12,13 L12,21'
     moon   = 'M21,12.79 A9,9 0 1 1 11.21,3 A7,7 0 0 0 21,12.79 Z'
     sun    = 'M16,12 A4,4 0 1 1 8,12 A4,4 0 1 1 16,12 Z M12,2 L12,4 M12,20 L12,22 M4.93,4.93 L6.34,6.34 M17.66,17.66 L19.07,19.07 M2,12 L4,12 M20,12 L22,12 M4.93,19.07 L6.34,17.66 M17.66,6.34 L19.07,4.93'
@@ -463,7 +464,7 @@ $icons = @{}
 $window.FindName('KeyIco').Data = $icons.key
 $window.FindName('CogIco').Data = $icons.cog
 $window.FindName('PaletteIco').Data = $icons.palette
-$linkIcons = @{ calculatrice = 'calc'; document = 'doc'; carton = 'box'; tableau = 'sheet'; web = 'globe'; dossier = 'folder' }
+$linkIcons = @{ calculatrice = 'calc'; document = 'doc'; carton = 'box'; tableau = 'sheet'; web = 'globe'; dossier = 'folder'; rein = 'rein' }
 
 # ---------------------------------------------------------------- colours (each PC remembers its mode and scheme; first time follows Windows, scheme Sarcelle)
 # Each scheme: id saved in scheme.txt, name shown in the picker, accent tint of the window surface,
