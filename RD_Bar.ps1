@@ -544,6 +544,7 @@ $S = @{ Sel = -1; Rd = $null; Kind = $null; Where = $null; Folder = $null; Match
 $fg = [Windows.Controls.TextBlock]::ForegroundProperty
 
 function Set-Message($text, [switch]$IsError) {
+    $S.MsgText = $text; $S.MsgErr = [bool]$IsError   # remembered, so a hover hint can put it back
     $Message.Text = $text
     $Message.Visibility = if ($text) { 'Visible' } else { 'Collapsed' }
     $Message.SetResourceReference($fg, $(if ($IsError) { 'Error' } else { 'Muted' }))
@@ -706,7 +707,7 @@ function Build-MyLinks {
         $l = $myList[$i]
         $n = if ($i -lt $myKeys.Count) { $myKeys[$i] } else { '' }
         $ico = if ($l.Kind -eq 'folder') { 'folder' } elseif ([IO.Path]::GetExtension($l.Path) -match '^\.(xls|xlsx|xlsm|csv)$') { 'sheet' } else { 'doc' }
-        $tip = $l.Path + $(if ($n) { "   (Alt+$n)" }) + "`nClic droit : renommer, déplacer, supprimer"
+        $tip = "Clic droit : renommer, déplacer, supprimer`n" + $l.Path + $(if ($n) { "   (Alt+$n)" })
         [pscustomobject]@{ I = $i; N = $n; Name = $l.Name; Path = $l.Path; Tip = $tip; Geo = $icons[$ico] }
     })
     $AddLink.Visibility = if ($myList.Count -lt $myMax) { 'Visible' } else { 'Collapsed' }
@@ -873,6 +874,7 @@ $pickRows = 8       # lines of a list shown at once (the bar would not fit on sc
 
 # ---------------------------------------------------------------- actions
 function Hide-Bar {
+    $S.HoverSaved = $null
     if ($S.Capture) { Complete-Capture '' }
     Show-Picker $false
     if ($S.Visible) { $S.Visible = $false; $window.Hide() }
@@ -971,6 +973,16 @@ $MyLinks.Add_MouseRightButtonUp({
     Show-Menu $editMenu $MyLinks
 })
 $AddLink.Add_MouseLeftButtonUp({ Show-Menu $addMenu $AddLink })
+# While the mouse is over "Mes liens", the footer says what right-click does; leaving puts the previous message back
+$myHoverHint = 'Mes liens : clic droit sur un lien pour le renommer, le déplacer ou le supprimer · Alt+7 à Alt+0 ouvrent les 4 premiers'
+$MyLinks.Add_MouseEnter({
+    if ($S.MsgText -ne $myHoverHint) { $S.HoverSaved = @{ Text = $S.MsgText; Err = $S.MsgErr } }
+    Set-Message $myHoverHint
+})
+$MyLinks.Add_MouseLeave({
+    $saved = $S.HoverSaved; $S.HoverSaved = $null
+    if ($saved -and $S.MsgText -eq $myHoverHint) { Set-Message $saved.Text -IsError:$saved.Err }   # only if nothing replaced the hint meanwhile
+})
 $Cog.Add_MouseLeftButtonUp({ Open-AppFiles })
 $KeyBtn.Add_MouseLeftButtonUp({ if ($S.Capture) { Complete-Capture ''; Render } else { Start-Capture } })
 $ThemeBtn.Add_MouseLeftButtonUp({ $script:themeName = if ($themeName -eq 'dark') { 'light' } else { 'dark' }; Set-Look; Save-Pref $themeFile $themeName })
