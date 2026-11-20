@@ -21,6 +21,63 @@ $shortcuts  = 'Startup', 'Programs' | ForEach-Object { Join-Path ([Environment]:
 
 function Get-RunArgs($script) { "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -STA -File `"$script`" -SourceDir `"$SourceDir`"" }
 
+# ---------------------------------------------------------------- application icon: the kidney with calyces, white on the Sarcelle teal
+$kidneyPath = 'M13,3 C17.5,3 20,7 20,12 C20,17 17.5,21 13,21 C9,21 6,19 6,16 C6,14 8,13.5 8,12 C8,10.5 6,10 6,8 C6,5 9,3 13,3 Z M8,12 L11.5,12 L15,8.5 M11.5,12 L16,12 M11.5,12 L15,15.5'
+$icoFile    = Join-Path $appDir 'RD_Browser.ico'
+
+function New-AppIconPng([int]$size) {   # the icon drawn at one size, as PNG bytes
+    Add-Type -AssemblyName PresentationCore, WindowsBase
+    $k = $size * 0.72 / 18                                # the kidney (18 units tall) fills about 72 % of the square
+    $dv = New-Object Windows.Media.DrawingVisual
+    $dc = $dv.RenderOpen()
+    $teal = New-Object Windows.Media.SolidColorBrush ([Windows.Media.Color]::FromRgb(0x0E, 0x7C, 0x7B))
+    $dc.DrawRoundedRectangle($teal, $null, (New-Object Windows.Rect(0, 0, $size, $size)), $size * 0.22, $size * 0.22)
+    $pen = New-Object Windows.Media.Pen([Windows.Media.Brushes]::White, [Math]::Max(1.4, $size * 0.072) / $k)
+    $pen.StartLineCap = 'Round'; $pen.EndLineCap = 'Round'; $pen.LineJoin = 'Round'
+    $dc.PushTransform((New-Object Windows.Media.TranslateTransform(($size / 2 - 13 * $k), ($size / 2 - 12 * $k))))
+    $dc.PushTransform((New-Object Windows.Media.ScaleTransform($k, $k)))
+    $dc.DrawGeometry($null, $pen, [Windows.Media.Geometry]::Parse($kidneyPath))
+    $dc.Pop(); $dc.Pop(); $dc.Close()
+    $rtb = New-Object Windows.Media.Imaging.RenderTargetBitmap($size, $size, 96, 96, [Windows.Media.PixelFormats]::Pbgra32)
+    $rtb.Render($dv)
+    $enc = New-Object Windows.Media.Imaging.PngBitmapEncoder
+    $enc.Frames.Add([Windows.Media.Imaging.BitmapFrame]::Create($rtb))
+    $ms = New-Object IO.MemoryStream
+    $enc.Save($ms)
+    , $ms.ToArray()
+}
+
+function Save-AppIco {   # RD_Browser.ico for the Start menu and start-up shortcuts (sizes 16 to 256)
+    $sizes = 16, 24, 32, 48, 256
+    $pngs = @(foreach ($z in $sizes) { , (New-AppIconPng $z) })
+    $ms = New-Object IO.MemoryStream
+    $w = New-Object IO.BinaryWriter($ms)
+    $w.Write([uint16]0); $w.Write([uint16]1); $w.Write([uint16]$sizes.Count)
+    $offset = 6 + 16 * $sizes.Count
+    for ($i = 0; $i -lt $sizes.Count; $i++) {
+        $b = if ($sizes[$i] -ge 256) { 0 } else { $sizes[$i] }   # 0 means 256 in an icon file
+        $w.Write([byte]$b); $w.Write([byte]$b); $w.Write([byte]0); $w.Write([byte]0)
+        $w.Write([uint16]1); $w.Write([uint16]32); $w.Write([uint32]$pngs[$i].Length); $w.Write([uint32]$offset)
+        $offset += $pngs[$i].Length
+    }
+    foreach ($png in $pngs) { $w.Write([byte[]]$png) }
+    $w.Flush()
+    $null = New-Item -ItemType Directory -Force $appDir
+    [IO.File]::WriteAllBytes($icoFile, $ms.ToArray())
+}
+
+function Update-ShortcutIcons {   # also brings PCs installed before the kidney icon up to date
+    try {
+        Save-AppIco
+        $shell = New-Object -ComObject WScript.Shell
+        foreach ($path in $shortcuts) {
+            if (-not (Test-Path -LiteralPath $path)) { continue }
+            $sc = $shell.CreateShortcut($path)
+            if ($sc.IconLocation -ne "$icoFile,0") { $sc.IconLocation = "$icoFile,0"; $sc.Save() }
+        }
+    } catch { }   # an icon is not worth failing over
+}
+
 function Stop-Running {   # only this user's session, never other people's bars on a shared server
     $session = (Get-Process -Id $PID).SessionId
     Get-CimInstance Win32_Process -Filter "Name='powershell.exe' AND SessionId=$session" -EA 0 |
@@ -57,11 +114,12 @@ if ($Install) {
     $local = Join-Path $appDir 'RD_Bar.ps1'
     Copy-Item -LiteralPath $PSCommandPath $local -Force
     Copy-Item -LiteralPath (Join-Path $SourceDir 'RD_Browser.config.json') $appDir -Force -EA 0
+    try { Save-AppIco } catch { }
     $shell = New-Object -ComObject WScript.Shell
     foreach ($path in $shortcuts) {
         $sc = $shell.CreateShortcut($path)
         $sc.TargetPath = $psExe; $sc.Arguments = Get-RunArgs $local; $sc.WorkingDirectory = $appDir
-        $sc.WindowStyle = 7; $sc.Hotkey = ''; $sc.IconLocation = "$env:SystemRoot\System32\shell32.dll,3"
+        $sc.WindowStyle = 7; $sc.Hotkey = ''; $sc.IconLocation = "$icoFile,0"
         $sc.Description = 'RD Browser - tapez un numéro de RD, ouvrez son dossier ou son fichier Manip'
         $sc.Save()
     }
@@ -105,6 +163,7 @@ $isFirst = $false
 $mutex = New-Object Threading.Mutex($true, 'Local\RD_Bar_Tray', [ref]$isFirst)
 if (-not $isFirst) { return }
 Read-Config
+Update-ShortcutIcons
 
 # ---------------------------------------------------------------- RD lookup
 # What was typed: digits (optionally after "RD") = an RD folder; letters then digits (ALP2, alp 002) = a project folder
@@ -461,7 +520,7 @@ $icons = @{}
     slides = 'M4,4 L20,4 A1,1 0 0 1 21,5 L21,16 A1,1 0 0 1 20,17 L4,17 A1,1 0 0 1 3,16 L3,5 A1,1 0 0 1 4,4 Z M12,17 L12,21 M8,21 L16,21'
     image  = 'M5,3 L19,3 A2,2 0 0 1 21,5 L21,19 A2,2 0 0 1 19,21 L5,21 A2,2 0 0 1 3,19 L3,5 A2,2 0 0 1 5,3 Z M10,9 A1.5,1.5 0 1 1 7,9 A1.5,1.5 0 1 1 10,9 Z M21,15 L16,10 L5,21'
     file   = 'M14,3 L7,3 A2,2 0 0 0 5,5 L5,19 A2,2 0 0 0 7,21 L17,21 A2,2 0 0 0 19,19 L19,8 Z M14,3 L14,8 L19,8'
-    rein   = 'M13,3 C17.5,3 20,7 20,12 C20,17 17.5,21 13,21 C9,21 6,19 6,16 C6,14 8,13.5 8,12 C8,10.5 6,10 6,8 C6,5 9,3 13,3 Z M8,12 L11.5,12 L15,8.5 M11.5,12 L16,12 M11.5,12 L15,15.5'   # kidney with calyces
+    rein   = $kidneyPath   # kidney with calyces (also the application icon)
     box    = 'M21,8 L12,3 L3,8 L3,16 L12,21 L21,16 Z M3,8 L12,13 L21,8 M12,13 L12,21'
     moon   = 'M21,12.79 A9,9 0 1 1 11.21,3 A7,7 0 0 0 21,12.79 Z'
     sun    = 'M16,12 A4,4 0 1 1 8,12 A4,4 0 1 1 16,12 Z M12,2 L12,4 M12,20 L12,22 M4.93,4.93 L6.34,6.34 M17.66,17.66 L19.07,19.07 M2,12 L4,12 M20,12 L22,12 M4.93,19.07 L6.34,17.66 M17.66,6.34 L19.07,4.93'
@@ -602,7 +661,7 @@ function Render {
     $shown = @($all | Select-Object -Skip $first -First $pickRows)
     $where = if ($all.Count -gt $pickRows) { "lignes $($first + 1)-$($first + $shown.Count) sur $($all.Count) (↑↓ pour défiler)" } else { '' }
     if ($S.FolderPick) { Set-Message (@('Échap pour revenir à la liste des dossiers', $where) -ne '' -join ' · ') }
-    elseif ($S.Folder) { Set-Message $(if ($S.Files.Count) { $where } else { 'Aucun fichier à la racine de ce dossier' }) }
+    elseif ($S.Folder) { Set-Message $(if ($S.Files.Count) { $where } elseif (@($S.Matches.Values | Where-Object { $_.Count }).Count) { 'Pas d''autre fichier à la racine de ce dossier' } else { 'Aucun fichier à la racine de ce dossier' }) }
     $Rows.ItemsSource = $shown
 }
 
@@ -648,11 +707,14 @@ function Update-FromInput {
     Select-Folder $S.Folder
 }
 
-function Select-Folder($folder) {   # reads the chosen folder's files, finds the buttons' files among them, then shows both
+function Select-Folder($folder) {   # reads the chosen folder's files, gives the tiles theirs, lists the others below
     $S.Folder = $folder
     $S.Matches = @{}
-    $S.Files = @(if ($folder) { Get-FolderFiles $folder })
-    if ($folder) { for ($i = 0; $i -lt $buttons.Count; $i++) { if ($buttons[$i].Type -eq 'file') { $S.Matches[$i] = @(Find-Files $S.Files $buttons[$i]) } } }
+    $all = @(if ($folder) { Get-FolderFiles $folder })
+    if ($folder) { for ($i = 0; $i -lt $buttons.Count; $i++) { if ($buttons[$i].Type -eq 'file') { $S.Matches[$i] = @(Find-Files $all $buttons[$i]) } } }
+    # files already reachable from a tile (Manip, Study Plan, Rapport final ...) are not listed again below the tiles
+    $onTiles = @($S.Matches.Values | ForEach-Object { $_ } | ForEach-Object { $_.FullName })
+    $S.Files = @($all | Where-Object { $onTiles -notcontains $_.FullName })
     $S.Sel = if ($S.Pick) { 0 } else { -1 }
     Render
 }
@@ -1056,22 +1118,9 @@ Set-Look
 
 # ---------------------------------------------------------------- tray icon and menu
 [Windows.Forms.Application]::EnableVisualStyles()
-# icon: R and D stacked diagonally on a rounded square in the Sarcelle accent
-$bmp = New-Object Drawing.Bitmap 32, 32
-$g = [Drawing.Graphics]::FromImage($bmp)
-$g.SmoothingMode = 'AntiAlias'
-$g.TextRenderingHint = 'AntiAliasGridFit'
-$square = New-Object Drawing.Drawing2D.GraphicsPath
-$square.AddArc(1, 1, 14, 14, 180, 90); $square.AddArc(17, 1, 14, 14, 270, 90)
-$square.AddArc(17, 17, 14, 14, 0, 90); $square.AddArc(1, 17, 14, 14, 90, 90)
-$square.CloseFigure()
-$g.FillPath((New-Object Drawing.SolidBrush ([Drawing.ColorTranslator]::FromHtml(($Schemes | Where-Object Id -eq 'sarcelle').L[3]))), $square)
-$fmt = New-Object Drawing.StringFormat
-$fmt.Alignment = $fmt.LineAlignment = 'Center'
-$font = New-Object Drawing.Font('Segoe UI', 14, 'Bold', 'Pixel')
-$g.DrawString('R', $font, [Drawing.Brushes]::White, (New-Object Drawing.RectangleF(1, 1.5, 20, 20)), $fmt)
-$g.DrawString('D', $font, [Drawing.Brushes]::White, (New-Object Drawing.RectangleF(10.5, 11, 20, 20)), $fmt)
-$g.Dispose()
+# icon: the kidney with calyces, white on the Sarcelle teal (same drawing as RD_Browser.ico)
+$iconStream = [IO.MemoryStream]::new((New-AppIconPng 32))
+$bmp = New-Object Drawing.Bitmap $iconStream
 
 $menu = New-Object Windows.Forms.ContextMenuStrip
 function Add-MenuItem($text, $action) { $item = $menu.Items.Add($text); $item.Add_Click($action); $item }
