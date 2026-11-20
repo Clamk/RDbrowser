@@ -8,7 +8,7 @@
   "QuickLinks": [
     { "Name": "Dossiers RD",  "Path": "D:\\Github\\Testing place" },
     { "Name": "Stocks",       "Path": "D:\\A_DEFINIR\\Stocks",   "Icon": "carton" },
-    { "Name": "Cellules",     "Path": "D:\\A_DEFINIR\\Cellules", "Icon": "tableau" },
+    { "Name": "Cellules",     "Path": "D:\\A_DEFINIR\\Cellules", "Icon": "cellule" },
     { "Name": "Calculateur",  "Path": "https://clamk-tools.github.io/Converter/", "Icon": "calculatrice" },
     { "Name": "Lien 5",       "Path": "" },
     { "Name": "Lien 6",       "Path": "" }

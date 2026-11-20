@@ -53,7 +53,7 @@ Clavier : Alt+1 à Alt+6.
            fichier : "\\\\serveur\\partage\\Stocks\\Stock.xlsx"
            web     : "https://intranet.exemple.fr"
          Path vide ("") : le lien reste caché.
-  Icon : (facultatif) dossier, document, tableau, carton, calculatrice, web, rein,
+  Icon : (facultatif) dossier, document, tableau, carton, calculatrice, web, rein, cellule,
          horloge, calendrier, fiole, microscope, thermometre, congelateur, pipette,
          tube, seringue, planning, liste ou equipe.
          Sans Icon : un globe pour les adresses web, un dossier pour le reste.

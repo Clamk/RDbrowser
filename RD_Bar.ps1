@@ -521,6 +521,7 @@ $icons = @{}
     image  = 'M5,3 L19,3 A2,2 0 0 1 21,5 L21,19 A2,2 0 0 1 19,21 L5,21 A2,2 0 0 1 3,19 L3,5 A2,2 0 0 1 5,3 Z M10,9 A1.5,1.5 0 1 1 7,9 A1.5,1.5 0 1 1 10,9 Z M21,15 L16,10 L5,21'
     file   = 'M14,3 L7,3 A2,2 0 0 0 5,5 L5,19 A2,2 0 0 0 7,21 L17,21 A2,2 0 0 0 19,19 L19,8 Z M14,3 L14,8 L19,8'
     rein   = $kidneyPath   # kidney with calyces (also the application icon)
+    cellule = 'M12,3 C16.5,2.6 20.8,5.6 21,10.5 C21.2,15 18.5,20.5 12.5,21 C7,21.4 3,17.8 3,12.5 C3,7.2 7,3.4 12,3 Z M16.5,11.5 A3.5,3.5 0 1 1 9.5,11.5 A3.5,3.5 0 1 1 16.5,11.5 Z M7.5,15.5 L7.51,15.5 M16.5,17 L16.51,17'   # cell: outline, nucleus, two organelles
     # quick-link icons from the Lucide set (lucide.dev, ISC licence), redrawn as single paths
     horloge     = 'M 22 12 A 10 10 0 1 1 2 12 A 10 10 0 1 1 22 12 Z M 12 6 v 6 l 4 2'
     calendrier  = 'M 8 2 v 3 M 16 2 v 3 M 5 3 H 19 A 2 2 0 0 1 21 5 V 19 A 2 2 0 0 1 19 21 H 5 A 2 2 0 0 1 3 19 V 5 A 2 2 0 0 1 5 3 Z M 3 9 h 18'
@@ -544,7 +545,7 @@ $icons = @{}
 $window.FindName('KeyIco').Data = $icons.key
 $window.FindName('CogIco').Data = $icons.cog
 $window.FindName('PaletteIco').Data = $icons.palette
-$linkIcons = @{ calculatrice = 'calc'; document = 'doc'; carton = 'box'; tableau = 'sheet'; web = 'globe'; dossier = 'folder'; rein = 'rein'
+$linkIcons = @{ calculatrice = 'calc'; document = 'doc'; carton = 'box'; tableau = 'sheet'; web = 'globe'; dossier = 'folder'; rein = 'rein'; cellule = 'cellule'
                horloge = 'horloge'; calendrier = 'calendrier'; fiole = 'fiole'; microscope = 'microscope'; thermometre = 'thermometre'; congelateur = 'congelateur'; pipette = 'pipette'; tube = 'tube'; seringue = 'seringue'; planning = 'planning'; liste = 'liste'; equipe = 'equipe' }
 
 # ---------------------------------------------------------------- colours (each PC remembers its mode and scheme; first time follows Windows, scheme Sarcelle)
