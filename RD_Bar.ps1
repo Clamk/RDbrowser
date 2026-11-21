@@ -1,8 +1,12 @@
 ﻿# RD Bar - lanceur RD au clavier, près de l'horloge.
 #   Setup.cmd / Uninstall.cmd : installe (copie locale + démarrage à la connexion) / désinstalle.
 #   Raccourci global (Hotkey du fichier de réglages, ou celui choisi sur ce PC) : ouvre la barre.
-#   Entrée = action surlignée, Haut/Bas = déplacer, Ctrl+lettre/chiffre = actions, Alt+1..6 = liens, Échap = masquer.
-#   Réglages : RD_Browser.config.json (relu à chaque ouverture). Mise à jour : copie partagée adoptée au démarrage si elle est valide.
+#   Entrée = action surlignée, Haut/Bas = déplacer, Ctrl+lettre/chiffre = actions, Alt+1..6 = liens, Alt+7..0 = mes liens, Échap = masquer.
+#   Recherche : un numéro (7, RD007) = dossier RD dans RDPath ; des lettres + un numéro (ALP2) = dossier projet dans ClientPath ; des lettres seules (AL, ALP) = liste des projets dont le code commence ainsi.
+#   Dossier trouvé : une rangée de tuiles (Dossier, Manip, Study Plan, Rapport final : Ctrl+D/M/S/R), puis les fichiers à sa racine
+#   rangés par type (Excel, Word, PDF, PowerPoint, images, autres). Entrée sans fichier surligné = ouvrir le dossier.
+#   Mes liens : chacun ajoute ses propres liens avec « Ajouter un lien » (enregistrés sur ce PC, dans mes_liens.json).
+#   Réglages : RD_Browser.config.json (relu à chaque ouverture) ; leurs explications : Aide_reglages.txt. Mise à jour : copie partagée adoptée au démarrage si elle est valide.
 param([switch]$Install, [switch]$Uninstall, [string]$SourceDir, [switch]$Welcome)
 
 $scriptDir = $PSScriptRoot
@@ -12,9 +16,97 @@ $appDir     = Join-Path $env:LOCALAPPDATA 'RD_Browser'
 $hotkeyFile = Join-Path $appDir 'hotkey.txt'
 $themeFile  = Join-Path $appDir 'theme.txt'
 $schemeFile = Join-Path $appDir 'scheme.txt'
+$myLinksFile = Join-Path $appDir 'mes_liens.json'   # this person's own links ("Mes liens"), on this PC only
 $shortcuts  = 'Startup', 'Programs' | ForEach-Object { Join-Path ([Environment]::GetFolderPath($_)) 'RD Browser.lnk' }
 
 function Get-RunArgs($script) { "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -STA -File `"$script`" -SourceDir `"$SourceDir`"" }
+
+# ---------------------------------------------------------------- application icon: the kidney with calyces, white on the Sarcelle teal
+$kidneyPath = 'M13,3 C17.5,3 20,7 20,12 C20,17 17.5,21 13,21 C9,21 6,19 6,16 C6,14 8,13.5 8,12 C8,10.5 6,10 6,8 C6,5 9,3 13,3 Z M8,12 L11.5,12 L15,8.5 M11.5,12 L16,12 M11.5,12 L15,15.5'
+$icoFile    = Join-Path $appDir 'RD_Browser.ico'
+
+function New-AppIconPng([int]$size) {   # the icon drawn at one size, as PNG bytes
+    # Drawn with System.Drawing, like the former "RD" icon: the kidney outline ($kidneyPath) is only curves and lines,
+    # so it is rebuilt here segment by segment (same points), then scaled into the teal square.
+    Add-Type -AssemblyName System.Drawing
+    $bmp = New-Object Drawing.Bitmap($size, $size, [Drawing.Imaging.PixelFormat]::Format32bppArgb)
+    $g = [Drawing.Graphics]::FromImage($bmp)
+    $g.SmoothingMode = [Drawing.Drawing2D.SmoothingMode]::AntiAlias
+    $g.PixelOffsetMode = [Drawing.Drawing2D.PixelOffsetMode]::HighQuality
+    $g.Clear([Drawing.Color]::Transparent)
+
+    $d = [float]($size * 0.44)                            # rounded square: corner diameter
+    $e = [float]($size - $d)
+    $z = [float]0
+    $square = New-Object Drawing.Drawing2D.GraphicsPath
+    $square.AddArc((New-Object Drawing.RectangleF($z, $z, $d, $d)), [float]180, [float]90)
+    $square.AddArc((New-Object Drawing.RectangleF($e, $z, $d, $d)), [float]270, [float]90)
+    $square.AddArc((New-Object Drawing.RectangleF($e, $e, $d, $d)), [float]0, [float]90)
+    $square.AddArc((New-Object Drawing.RectangleF($z, $e, $d, $d)), [float]90, [float]90)
+    $square.CloseFigure()
+    $teal = New-Object Drawing.SolidBrush ([Drawing.Color]::FromArgb(255, 0x0E, 0x7C, 0x7B))
+    $g.FillPath($teal, $square)
+
+    function IconPt($x, $y) { New-Object Drawing.PointF([float]$x, [float]$y) }   # one point of the 24 x 24 drawing
+    $kidney = New-Object Drawing.Drawing2D.GraphicsPath
+    $kidney.StartFigure()                                 # outline: six curves, the same points as $kidneyPath
+    $kidney.AddBezier((IconPt 13 3),  (IconPt 17.5 3), (IconPt 20 7),    (IconPt 20 12))
+    $kidney.AddBezier((IconPt 20 12), (IconPt 20 17),  (IconPt 17.5 21), (IconPt 13 21))
+    $kidney.AddBezier((IconPt 13 21), (IconPt 9 21),   (IconPt 6 19),    (IconPt 6 16))
+    $kidney.AddBezier((IconPt 6 16),  (IconPt 6 14),   (IconPt 8 13.5),  (IconPt 8 12))
+    $kidney.AddBezier((IconPt 8 12),  (IconPt 8 10.5), (IconPt 6 10),    (IconPt 6 8))
+    $kidney.AddBezier((IconPt 6 8),   (IconPt 6 5),    (IconPt 9 3),     (IconPt 13 3))
+    $kidney.CloseFigure()
+    $kidney.StartFigure(); $kidney.AddLine((IconPt 8 12), (IconPt 11.5 12)); $kidney.AddLine((IconPt 11.5 12), (IconPt 15 8.5))   # calyces
+    $kidney.StartFigure(); $kidney.AddLine((IconPt 11.5 12), (IconPt 16 12))
+    $kidney.StartFigure(); $kidney.AddLine((IconPt 11.5 12), (IconPt 15 15.5))
+    $k = [float]($size * 0.72 / 18)                       # the kidney (18 units tall) fills about 72 % of the square
+    $m = New-Object Drawing.Drawing2D.Matrix
+    $m.Translate([float]($size / 2 - 13 * $k), [float]($size / 2 - 12 * $k))
+    $m.Scale($k, $k)
+    $kidney.Transform($m)
+    $pen = New-Object Drawing.Pen([Drawing.Color]::White, [float][Math]::Max(1.4, $size * 0.072))
+    $pen.StartCap = [Drawing.Drawing2D.LineCap]::Round; $pen.EndCap = [Drawing.Drawing2D.LineCap]::Round
+    $pen.LineJoin = [Drawing.Drawing2D.LineJoin]::Round
+    $g.DrawPath($pen, $kidney)
+    $g.Dispose(); $pen.Dispose(); $teal.Dispose(); $kidney.Dispose(); $square.Dispose()
+
+    $ms = New-Object IO.MemoryStream
+    $bmp.Save($ms, [Drawing.Imaging.ImageFormat]::Png)
+    $bmp.Dispose()
+    , $ms.ToArray()
+}
+
+function Save-AppIco {   # RD_Browser.ico for the Start menu and start-up shortcuts (sizes 16 to 256)
+    $sizes = 16, 24, 32, 48, 256
+    $pngs = @(foreach ($z in $sizes) { , (New-AppIconPng $z) })
+    $ms = New-Object IO.MemoryStream
+    $w = New-Object IO.BinaryWriter($ms)
+    $w.Write([uint16]0); $w.Write([uint16]1); $w.Write([uint16]$sizes.Count)
+    $offset = 6 + 16 * $sizes.Count
+    for ($i = 0; $i -lt $sizes.Count; $i++) {
+        $b = if ($sizes[$i] -ge 256) { 0 } else { $sizes[$i] }   # 0 means 256 in an icon file
+        $w.Write([byte]$b); $w.Write([byte]$b); $w.Write([byte]0); $w.Write([byte]0)
+        $w.Write([uint16]1); $w.Write([uint16]32); $w.Write([uint32]$pngs[$i].Length); $w.Write([uint32]$offset)
+        $offset += $pngs[$i].Length
+    }
+    foreach ($png in $pngs) { $w.Write([byte[]]$png) }
+    $w.Flush()
+    $null = New-Item -ItemType Directory -Force $appDir
+    [IO.File]::WriteAllBytes($icoFile, $ms.ToArray())
+}
+
+function Update-ShortcutIcons {   # also brings PCs installed before the kidney icon up to date
+    try {
+        Save-AppIco
+        $shell = New-Object -ComObject WScript.Shell
+        foreach ($path in $shortcuts) {
+            if (-not (Test-Path -LiteralPath $path)) { continue }
+            $sc = $shell.CreateShortcut($path)
+            if ($sc.IconLocation -ne "$icoFile,0") { $sc.IconLocation = "$icoFile,0"; $sc.Save() }
+        }
+    } catch { }   # an icon is not worth failing over
+}
 
 function Stop-Running {   # only this user's session, never other people's bars on a shared server
     $session = (Get-Process -Id $PID).SessionId
@@ -32,7 +124,12 @@ function Read-Config {
             [pscustomobject]@{ Label = 'Dossier'; Type = 'folder' },
             [pscustomobject]@{ Label = 'Manip'; Type = 'file'; Pattern = 'manip'; Shortcut = 'M' }) }
     }
-    $script:root    = [IO.Path]::GetFullPath([IO.Path]::Combine($SourceDir, "$($config.RootPath)"))
+    # RDPath: where RD001, RD002 ... are. ClientPath (optional): enterprise folders, each holding project folders (e.g. ALP002).
+    # The former names RootPath and ProjectsPath are still read, so an older settings file keeps working.
+    $rdSetting     = if ($null -ne $config.RDPath) { "$($config.RDPath)" } else { "$($config.RootPath)" }
+    $clientSetting = if ($null -ne $config.ClientPath) { "$($config.ClientPath)" } else { "$($config.ProjectsPath)" }
+    $script:root     = [IO.Path]::GetFullPath([IO.Path]::Combine($SourceDir, $rdSetting))
+    $script:projRoot = if ($clientSetting.Trim()) { [IO.Path]::GetFullPath([IO.Path]::Combine($SourceDir, $clientSetting.Trim())) }
     $script:buttons = @($config.Buttons)
     $script:defaultHotkey = if ($config.Hotkey) { "$($config.Hotkey)" } else { 'Ctrl+Alt+F' }
     $own = Get-Content -LiteralPath $hotkeyFile -EA 0 | Select-Object -First 1
@@ -47,11 +144,12 @@ if ($Install) {
     $local = Join-Path $appDir 'RD_Bar.ps1'
     Copy-Item -LiteralPath $PSCommandPath $local -Force
     Copy-Item -LiteralPath (Join-Path $SourceDir 'RD_Browser.config.json') $appDir -Force -EA 0
+    try { Save-AppIco } catch { }
     $shell = New-Object -ComObject WScript.Shell
     foreach ($path in $shortcuts) {
         $sc = $shell.CreateShortcut($path)
         $sc.TargetPath = $psExe; $sc.Arguments = Get-RunArgs $local; $sc.WorkingDirectory = $appDir
-        $sc.WindowStyle = 7; $sc.Hotkey = ''; $sc.IconLocation = "$env:SystemRoot\System32\shell32.dll,3"
+        $sc.WindowStyle = 7; $sc.Hotkey = ''; $sc.IconLocation = "$icoFile,0"
         $sc.Description = 'RD Browser - tapez un numéro de RD, ouvrez son dossier ou son fichier Manip'
         $sc.Save()
     }
@@ -95,9 +193,20 @@ $isFirst = $false
 $mutex = New-Object Threading.Mutex($true, 'Local\RD_Bar_Tray', [ref]$isFirst)
 if (-not $isFirst) { return }
 Read-Config
+Update-ShortcutIcons
 
 # ---------------------------------------------------------------- RD lookup
-function Get-RdName($text) { $d = $text -replace '\D'; if ($d -and $d.Length -le 6) { 'RD{0:D3}' -f [int]$d } }
+# What was typed: digits (optionally after "RD") = an RD folder; letters then digits (ALP2, alp 002) = a project folder
+function Get-Query($text) {
+    $t = "$text".Trim()
+    if ($t -match '^(rd)?[\s_-]*(\d{1,6})$') { return @{ Kind = 'rd'; Label = 'RD{0:D3}' -f [int]$Matches[2] } }
+    if ($t -match '^([a-z]{1,8})[\s_-]*(\d{1,6})$') {
+        $letters = $Matches[1].ToUpper(); $number = [int]$Matches[2]
+        return @{ Kind = 'project'; Letters = $letters; Number = $number; Label = '{0}{1:D3}' -f $letters, $number }
+    }
+    # letters only (2 or more, not "RD" which is on its way to an RD number) = list every project with that code
+    if ($t -match '^[a-z]{2,8}$' -and $t -ne 'rd') { return @{ Kind = 'project'; Letters = $t.ToUpper(); Number = $null; Label = $t.ToUpper() } }
+}
 
 function Find-RdFolder($rd) {
     $exact = Join-Path $root $rd
@@ -105,12 +214,33 @@ function Find-RdFolder($rd) {
     Get-ChildItem -LiteralPath $root -Directory -EA 0 | Where-Object Name -match "^$rd(\D|$)" | Select-Object -First 1
 }
 
-function Find-Files($dir, $btn) {
+function Find-Files($files, $btn) {   # among the folder's files, those a button looks for (newest first)
     $ext = if ($btn.Extensions) { @($btn.Extensions) } else { '.xlsx', '.xlsm', '.xls' }
-    $pattern = [regex]::Escape("$($btn.Pattern)")
-    Get-ChildItem -LiteralPath $dir.FullName -File -EA 0 |
-        Where-Object { $_.Name -notlike '~$*' -and $ext -contains $_.Extension -and $_.BaseName -match $pattern } |
-        Sort-Object LastWriteTime -Descending
+    $pattern = [regex]::Escape(("$($btn.Pattern)" -replace '[\s_-]'))   # spaces, _ and - are ignored on both sides
+    $files | Where-Object { $ext -contains $_.Extension -and ($_.BaseName -replace '[\s_-]') -match $pattern } | Sort-Object LastWriteTime -Descending
+}
+
+# Files in the root of a folder, ordered by type (Excel, Word, PDF, PowerPoint, images, others), newest first within a type.
+# Excel's temporary ~$ files and Windows' hidden/system files (Thumbs.db, desktop.ini) are left out.
+$fileTypes = @(
+    @{ Icon = 'sheet'; Ext = '.xlsx', '.xlsm', '.xls', '.csv' }
+    @{ Icon = 'doc';   Ext = '.docx', '.docm', '.doc', '.rtf', '.odt', '.txt' }
+    @{ Icon = 'pdf';   Ext = '.pdf' }
+    @{ Icon = 'slides'; Ext = '.pptx', '.pptm', '.ppt' }
+    @{ Icon = 'image'; Ext = '.png', '.jpg', '.jpeg', '.tif', '.tiff', '.bmp', '.gif' }
+)
+function Get-FileType($file) {   # position of the file's type in $fileTypes (others last)
+    for ($t = 0; $t -lt $fileTypes.Count; $t++) { if ($fileTypes[$t].Ext -contains $file.Extension) { return $t } }
+    $fileTypes.Count
+}
+function Get-FileIcon($ext) {   # icon name for a file extension
+    $t = Get-FileType ([pscustomobject]@{ Extension = $ext })
+    if ($t -lt $fileTypes.Count) { $fileTypes[$t].Icon } else { 'file' }
+}
+function Get-FolderFiles($folder) {
+    Get-ChildItem -LiteralPath $folder.FullName -File -EA 0 |
+        Where-Object { $_.Name -notlike '~$*' -and ([int]$_.Attributes -band 6) -eq 0 }   # 6 = Hidden (2) + System (4) |
+        Sort-Object @{ Expression = { Get-FileType $_ } }, @{ Expression = 'LastWriteTime'; Descending = $true }
 }
 
 # ---------------------------------------------------------------- global shortcut
@@ -125,6 +255,54 @@ public class RdHotkey : NativeWindow, IDisposable {
     public RdHotkey(uint mods, uint vk) { CreateHandle(new CreateParams()); Registered = RegisterHotKey(Handle, 1, mods | 0x4000, vk); }
     protected override void WndProc(ref Message m) { if (m.Msg == 0x0312 && Pressed != null) Pressed(this, EventArgs.Empty); base.WndProc(ref m); }
     public void Dispose() { UnregisterHotKey(Handle, 1); DestroyHandle(); }
+}
+'@
+
+# Standard Windows browse window (same as Explorer, with an address bar for \\server paths), for a file or a folder
+Add-Type -TypeDefinition @'
+using System; using System.Runtime.InteropServices;
+public static class RdPicker {
+    [ComImport, Guid("DC1C5A9C-E88A-4dde-A5A1-60F82A20AEF7")] class FileOpenDialog { }
+    [ComImport, Guid("42f85136-db7e-439c-85f1-e4075d135fc8"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    interface IFileDialog {
+        [PreserveSig] int Show(IntPtr parent);
+        void SetFileTypes(uint count, IntPtr specs);
+        void SetFileTypeIndex(uint index);
+        void GetFileTypeIndex(out uint index);
+        void Advise(IntPtr events, out uint cookie);
+        void Unadvise(uint cookie);
+        void SetOptions(uint options);
+        void GetOptions(out uint options);
+        void SetDefaultFolder(IShellItem item);
+        void SetFolder(IShellItem item);
+        void GetFolder(out IShellItem item);
+        void GetCurrentSelection(out IShellItem item);
+        void SetFileName([MarshalAs(UnmanagedType.LPWStr)] string name);
+        void GetFileName([MarshalAs(UnmanagedType.LPWStr)] out string name);
+        void SetTitle([MarshalAs(UnmanagedType.LPWStr)] string title);
+        void SetOkButtonLabel([MarshalAs(UnmanagedType.LPWStr)] string label);
+        void SetFileNameLabel([MarshalAs(UnmanagedType.LPWStr)] string label);
+        void GetResult(out IShellItem item);
+    }
+    [ComImport, Guid("43826D1E-E718-42EE-BC55-A1E261C37BFE"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    interface IShellItem {
+        void BindToHandler(IntPtr bc, ref Guid handler, ref Guid iid, out IntPtr result);
+        void GetParent(out IShellItem parent);
+        void GetDisplayName(uint kind, [MarshalAs(UnmanagedType.LPWStr)] out string name);
+    }
+    // Returns the chosen path, or null if cancelled
+    public static string Pick(IntPtr owner, bool folder, string title) {
+        IFileDialog d = (IFileDialog)new FileOpenDialog();
+        try {
+            uint o; d.GetOptions(out o);
+            d.SetOptions(o | 0x40u | 0x800u | 0x1000u | (folder ? 0x20u : 0u));   // real paths only, must exist, folders if asked
+            d.SetTitle(title);
+            if (d.Show(owner) != 0) return null;
+            IShellItem item; d.GetResult(out item);
+            string path; item.GetDisplayName(0x80058000u, out path);
+            return path;
+        } finally { Marshal.ReleaseComObject(d); }
+    }
 }
 '@
 
@@ -169,16 +347,32 @@ $window = [Windows.Markup.XamlReader]::Parse(@'
       <Setter Property="BorderBrush" Value="{DynamicResource KbdLine}"/><Setter Property="BorderThickness" Value="1"/>
       <Setter Property="CornerRadius" Value="4"/><Setter Property="Padding" Value="6,1"/><Setter Property="VerticalAlignment" Value="Center"/>
     </Style>
+    <!-- One line of the links rail (shared links and "Mes liens"); the Alt number badge is hidden when there is none -->
+    <DataTemplate x:Key="LinkTpl">
+      <Border Style="{StaticResource Hover}" Height="32" Margin="0,1" Padding="8,0,6,0" CornerRadius="4" ToolTip="{Binding Tip}">
+        <DockPanel>
+          <Path Style="{StaticResource Ico}" Width="15" Height="15" Margin="0,0,8,0" Stroke="{DynamicResource Text}" Data="{Binding Geo}"/>
+          <Border x:Name="K" DockPanel.Dock="Right" Style="{StaticResource Kbd}" CornerRadius="3" Padding="4,0">
+            <TextBlock Text="{Binding N}" FontSize="10" Foreground="{DynamicResource KbdText}"/>
+          </Border>
+          <TextBlock Text="{Binding Name}" FontSize="13" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource Text}"/>
+        </DockPanel>
+      </Border>
+      <DataTemplate.Triggers>
+        <DataTrigger Binding="{Binding N}" Value=""><Setter TargetName="K" Property="Visibility" Value="Collapsed"/></DataTrigger>
+      </DataTemplate.Triggers>
+    </DataTemplate>
   </Window.Resources>
   <Grid x:Name="Root">
     <Border Margin="24" CornerRadius="8" BorderThickness="1" Background="{DynamicResource Card}" BorderBrush="{DynamicResource CardLine}">
       <Border.Effect><DropShadowEffect BlurRadius="28" ShadowDepth="6" Opacity="0.35"/></Border.Effect>
       <Grid>
         <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="180"/></Grid.ColumnDefinitions>
+        <Grid.RowDefinitions><RowDefinition/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
 
-        <!-- Search box (accent underline), RD header, message line, actions (actions share the remaining height) -->
+        <!-- Search box (accent underline), RD header, action tiles, list of files or folders -->
         <Grid Margin="14,14,12,10">
-          <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition/></Grid.RowDefinitions>
+          <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition/></Grid.RowDefinitions>
           <Grid Height="44">
             <Border CornerRadius="6" BorderThickness="1" Background="{DynamicResource Box}" BorderBrush="{DynamicResource CardLine}"/>
             <Border Height="2" VerticalAlignment="Bottom" CornerRadius="0,0,6,6" Background="{DynamicResource Accent}"/>
@@ -200,8 +394,46 @@ $window = [Windows.Markup.XamlReader]::Parse(@'
             <TextBlock x:Name="RdName" FontSize="15" FontWeight="Bold"/>
             <TextBlock x:Name="RdPath" FontSize="12" Margin="10,0,0,1" VerticalAlignment="Bottom" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource Muted}"/>
           </DockPanel>
-          <TextBlock x:Name="Message" Grid.Row="2" Margin="4,10,4,0" FontSize="13" TextWrapping="Wrap"/>
-          <ItemsControl x:Name="Rows" Grid.Row="3" Margin="0,8,0,0">
+          <!-- Action tiles (Dossier, Manip, ...): one row of buttons for the found folder; greyed when there is nothing to open -->
+          <ItemsControl x:Name="Tiles" Grid.Row="3" Margin="-3,10,-3,0">
+            <ItemsControl.ItemsPanel><ItemsPanelTemplate><UniformGrid Rows="1"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate><DataTemplate>
+              <Border x:Name="B" Margin="3,0" Padding="10,8,8,8" CornerRadius="6" BorderThickness="1" Cursor="Hand" ToolTip="{Binding Tip}"
+                      Background="{DynamicResource Box}" BorderBrush="{DynamicResource CardLine}">
+                <StackPanel>
+                  <DockPanel>
+                    <Border x:Name="K" DockPanel.Dock="Right" Style="{StaticResource Kbd}" CornerRadius="3" Padding="4,0">
+                      <TextBlock x:Name="KT" Text="{Binding Hint}" FontSize="10" Foreground="{DynamicResource KbdText}"/>
+                    </Border>
+                    <Path x:Name="P" Style="{StaticResource Ico}" Width="18" Height="18" HorizontalAlignment="Left" Stroke="{DynamicResource Text}" Data="{Binding Geo}"/>
+                  </DockPanel>
+                  <TextBlock x:Name="T" Text="{Binding Text}" Margin="0,7,0,0" FontSize="13" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource Text}"/>
+                  <TextBlock x:Name="S" Text="{Binding Sub}" Margin="0,1,0,0" FontSize="11" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource Muted}"/>
+                </StackPanel>
+              </Border>
+              <DataTemplate.Triggers>
+                <Trigger SourceName="B" Property="IsMouseOver" Value="True"><Setter TargetName="B" Property="Background" Value="{DynamicResource Hover}"/></Trigger>
+                <DataTrigger Binding="{Binding Sel}" Value="True">
+                  <Setter TargetName="B" Property="Background" Value="{DynamicResource Sel}"/>
+                  <Setter TargetName="B" Property="BorderBrush" Value="{DynamicResource Sel}"/>
+                  <Setter TargetName="P" Property="Stroke" Value="{DynamicResource SelText}"/>
+                  <Setter TargetName="T" Property="Foreground" Value="{DynamicResource SelText}"/>
+                  <Setter TargetName="S" Property="Foreground" Value="{DynamicResource SelText}"/>
+                  <Setter TargetName="K" Property="BorderBrush" Value="{DynamicResource SelKbd}"/>
+                  <Setter TargetName="KT" Property="Foreground" Value="{DynamicResource SelText}"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding On}" Value="False">
+                  <Setter TargetName="B" Property="Cursor" Value="Arrow"/>
+                  <Setter TargetName="B" Property="Background" Value="Transparent"/>
+                  <Setter TargetName="P" Property="Stroke" Value="{DynamicResource Dim}"/>
+                  <Setter TargetName="T" Property="Foreground" Value="{DynamicResource Dim}"/>
+                  <Setter TargetName="S" Property="Foreground" Value="{DynamicResource Dim}"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Hint}" Value=""><Setter TargetName="K" Property="Visibility" Value="Collapsed"/></DataTrigger>
+              </DataTemplate.Triggers>
+            </DataTemplate></ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <ItemsControl x:Name="Rows" Grid.Row="4" Margin="0,8,0,0">
             <ItemsControl.ItemsPanel><ItemsPanelTemplate><UniformGrid Columns="1"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
             <ItemsControl.ItemTemplate><DataTemplate>
               <Border x:Name="R" Height="42" Margin="0,2" Padding="12,0" CornerRadius="6" Background="Transparent" Cursor="Hand">
@@ -240,34 +472,25 @@ $window = [Windows.Markup.XamlReader]::Parse(@'
           </ItemsControl>
         </Grid>
 
-        <!-- Links rail: quick links, tool buttons at the bottom, colour picker shown above the tools -->
-        <Border Grid.Column="1" Background="{DynamicResource Side}" BorderBrush="{DynamicResource Line}" BorderThickness="1,0,0,0" CornerRadius="0,8,8,0">
+        <!-- Links rail: quick links and Mes liens (stops at the footer; the colour picker opens just above it) -->
+        <Border Grid.Column="1" Background="{DynamicResource Side}" BorderBrush="{DynamicResource Line}" BorderThickness="1,0,0,0" CornerRadius="0,8,0,0">
           <Grid>
             <DockPanel Margin="8,14,8,8">
-              <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,8,0,0">
-                <Border x:Name="ThemeBtn" Style="{StaticResource Tool}"><Path x:Name="ThemeIco" Style="{StaticResource Ico}" Width="18" Height="18"/></Border>
-                <Border x:Name="PaletteBtn" Style="{StaticResource Tool}" ToolTip="Changer les couleurs"><Path x:Name="PaletteIco" Style="{StaticResource Ico}" Width="18" Height="18"/></Border>
-                <Border x:Name="KeyBtn" Style="{StaticResource Tool}"><Path x:Name="KeyIco" Style="{StaticResource Ico}" Width="18" Height="18"/></Border>
-                <Border x:Name="Cog" Style="{StaticResource Tool}" ToolTip="Ouvrir les fichiers de RD Browser (réglages, scripts)"><Path x:Name="CogIco" Style="{StaticResource Ico}" Width="18" Height="18"/></Border>
-              </StackPanel>
               <StackPanel>
                 <TextBlock x:Name="LinksTitle" Text="Liens rapides" FontSize="12" FontWeight="SemiBold" Margin="8,0,0,6" Foreground="{DynamicResource Text}"/>
-                <ItemsControl x:Name="Links">
-                  <ItemsControl.ItemTemplate><DataTemplate>
-                    <Border Style="{StaticResource Hover}" Height="32" Margin="0,1" Padding="8,0,6,0" CornerRadius="4" ToolTip="{Binding Tip}">
-                      <DockPanel>
-                        <Path Style="{StaticResource Ico}" Width="15" Height="15" Margin="0,0,8,0" Stroke="{DynamicResource Text}" Data="{Binding Geo}"/>
-                        <Border DockPanel.Dock="Right" Style="{StaticResource Kbd}" CornerRadius="3" Padding="4,0">
-                          <TextBlock Text="{Binding N}" FontSize="10" Foreground="{DynamicResource KbdText}"/>
-                        </Border>
-                        <TextBlock Text="{Binding Name}" FontSize="13" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource Text}"/>
-                      </DockPanel>
-                    </Border>
-                  </DataTemplate></ItemsControl.ItemTemplate>
-                </ItemsControl>
+                <ItemsControl x:Name="Links" ItemTemplate="{StaticResource LinkTpl}"/>
+                <TextBlock Text="Mes liens" FontSize="12" FontWeight="SemiBold" Margin="8,12,0,6" Foreground="{DynamicResource Text}"/>
+                <ItemsControl x:Name="MyLinks" ItemTemplate="{StaticResource LinkTpl}"/>
+                <Border x:Name="AddLink" Style="{StaticResource Hover}" Height="32" Margin="0,1" Padding="8,0,6,0" CornerRadius="4"
+                        ToolTip="Ajouter votre propre lien vers un dossier ou un fichier (visible seulement par vous, sur ce PC)">
+                  <DockPanel>
+                    <Path Style="{StaticResource Ico}" Width="15" Height="15" Margin="0,0,8,0" Data="M12,5 L12,19 M5,12 L19,12"/>
+                    <TextBlock Text="Ajouter un lien" FontSize="13" VerticalAlignment="Center" Foreground="{DynamicResource Muted}"/>
+                  </DockPanel>
+                </Border>
               </StackPanel>
             </DockPanel>
-            <Border x:Name="Picker" Visibility="Collapsed" VerticalAlignment="Bottom" Margin="8,0,8,50" Padding="10,8,10,8" CornerRadius="8" BorderThickness="1"
+            <Border x:Name="Picker" Visibility="Collapsed" VerticalAlignment="Bottom" Margin="8,0,8,8" Padding="10,8,10,8" CornerRadius="8" BorderThickness="1"
                     Background="{DynamicResource Box}" BorderBrush="{DynamicResource CardLine}">
               <Border.Effect><DropShadowEffect BlurRadius="16" ShadowDepth="3" Opacity="0.25"/></Border.Effect>
               <StackPanel>
@@ -295,12 +518,23 @@ $window = [Windows.Markup.XamlReader]::Parse(@'
             </Border>
           </Grid>
         </Border>
+
+        <!-- Footer across the whole bar: a separator line, the message on the left, the tool buttons on the right -->
+        <Border Grid.Row="1" Grid.Column="1" Background="{DynamicResource Side}" BorderBrush="{DynamicResource Line}" BorderThickness="1,0,0,0" CornerRadius="0,0,8,0"/>
+        <Border Grid.Row="1" Grid.ColumnSpan="2" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource Line}"/>
+        <TextBlock x:Name="Message" Grid.Row="1" Margin="18,6,12,6" VerticalAlignment="Center" FontSize="12" TextWrapping="Wrap"/>
+        <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" Margin="8">
+          <Border x:Name="ThemeBtn" Style="{StaticResource Tool}"><Path x:Name="ThemeIco" Style="{StaticResource Ico}" Width="18" Height="18"/></Border>
+          <Border x:Name="PaletteBtn" Style="{StaticResource Tool}" ToolTip="Changer les couleurs"><Path x:Name="PaletteIco" Style="{StaticResource Ico}" Width="18" Height="18"/></Border>
+          <Border x:Name="KeyBtn" Style="{StaticResource Tool}"><Path x:Name="KeyIco" Style="{StaticResource Ico}" Width="18" Height="18"/></Border>
+          <Border x:Name="Cog" Style="{StaticResource Tool}" ToolTip="Ouvrir les fichiers de RD Browser (réglages, scripts)"><Path x:Name="CogIco" Style="{StaticResource Ico}" Width="18" Height="18"/></Border>
+        </StackPanel>
       </Grid>
     </Border>
   </Grid>
 </Window>
 '@)
-foreach ($n in 'Box', 'Header', 'RdName', 'RdPath', 'Message', 'Rows', 'Links', 'LinksTitle', 'ThemeBtn', 'ThemeIco', 'KeyBtn', 'Cog',
+foreach ($n in 'Box', 'Header', 'RdName', 'RdPath', 'Message', 'Tiles', 'Rows', 'Links', 'LinksTitle', 'MyLinks', 'AddLink', 'ThemeBtn', 'ThemeIco', 'KeyBtn', 'Cog',
               'PaletteBtn', 'Picker', 'Swatches', 'SchemeName') {
     Set-Variable $n $window.FindName($n)
 }
@@ -312,6 +546,25 @@ $icons = @{}
     globe  = 'M21,12 A9,9 0 1 1 3,12 A9,9 0 1 1 21,12 Z M3,12 L21,12 M12,3 C8,7 8,17 12,21 M12,3 C16,7 16,17 12,21'
     calc   = 'M6,2 L18,2 A2,2 0 0 1 20,4 L20,20 A2,2 0 0 1 18,22 L6,22 A2,2 0 0 1 4,20 L4,4 A2,2 0 0 1 6,2 Z M8,6 L16,6 L16,10 L8,10 Z M8,14 L8.01,14 M12,14 L12.01,14 M16,14 L16.01,14 M8,18 L8.01,18 M12,18 L12.01,18 M16,18 L16.01,18'
     doc    = 'M14,3 L7,3 A2,2 0 0 0 5,5 L5,19 A2,2 0 0 0 7,21 L17,21 A2,2 0 0 0 19,19 L19,8 Z M14,3 L14,8 L19,8 M9,13 L15,13 M9,17 L15,17'
+    pdf    = 'M14,3 L7,3 A2,2 0 0 0 5,5 L5,19 A2,2 0 0 0 7,21 L17,21 A2,2 0 0 0 19,19 L19,8 Z M14,3 L14,8 L19,8 M8,17 L16,17 L16,12 L8,12 Z'
+    slides = 'M4,4 L20,4 A1,1 0 0 1 21,5 L21,16 A1,1 0 0 1 20,17 L4,17 A1,1 0 0 1 3,16 L3,5 A1,1 0 0 1 4,4 Z M12,17 L12,21 M8,21 L16,21'
+    image  = 'M5,3 L19,3 A2,2 0 0 1 21,5 L21,19 A2,2 0 0 1 19,21 L5,21 A2,2 0 0 1 3,19 L3,5 A2,2 0 0 1 5,3 Z M10,9 A1.5,1.5 0 1 1 7,9 A1.5,1.5 0 1 1 10,9 Z M21,15 L16,10 L5,21'
+    file   = 'M14,3 L7,3 A2,2 0 0 0 5,5 L5,19 A2,2 0 0 0 7,21 L17,21 A2,2 0 0 0 19,19 L19,8 Z M14,3 L14,8 L19,8'
+    rein   = $kidneyPath   # kidney with calyces (also the application icon)
+    cellule = 'M12,3 C16.5,2.6 20.8,5.6 21,10.5 C21.2,15 18.5,20.5 12.5,21 C7,21.4 3,17.8 3,12.5 C3,7.2 7,3.4 12,3 Z M16.5,11.5 A3.5,3.5 0 1 1 9.5,11.5 A3.5,3.5 0 1 1 16.5,11.5 Z M7.5,15.5 L7.51,15.5 M16.5,17 L16.51,17'   # cell: outline, nucleus, two organelles
+    # quick-link icons from the Lucide set (lucide.dev, ISC licence), redrawn as single paths
+    horloge     = 'M 22 12 A 10 10 0 1 1 2 12 A 10 10 0 1 1 22 12 Z M 12 6 v 6 l 4 2'
+    calendrier  = 'M 8 2 v 3 M 16 2 v 3 M 5 3 H 19 A 2 2 0 0 1 21 5 V 19 A 2 2 0 0 1 19 21 H 5 A 2 2 0 0 1 3 19 V 5 A 2 2 0 0 1 5 3 Z M 3 9 h 18'
+    fiole       = 'M 14 2 v 6 a 2 2 0 0 0 .245 .96 l 5.51 10.08 A 2 2 0 0 1 18 22 H 6 a 2 2 0 0 1 -1.755 -2.96 l 5.51 -10.08 A 2 2 0 0 0 10 8 V 2 M 6.453 15 h 11.094 M 8.5 2 h 7'
+    microscope  = 'M 6 18 h 8 M 3 22 h 18 M 14 22 a 7 7 0 1 0 0 -14 h -1 M 9 14 h 2 M 9 12 a 2 2 0 0 1 -2 -2 V 6 h 6 v 4 a 2 2 0 0 1 -2 2 Z M 12 6 V 3 a 1 1 0 0 0 -1 -1 H 9 a 1 1 0 0 0 -1 1 v 3'
+    thermometre = 'M 14 4 v 10.54 a 4 4 0 1 1 -4 0 V 4 a 2 2 0 0 1 4 0 Z'
+    congelateur = 'M 10 20 l -1.25 -2.5 L 6 18 M 10 4 L 8.75 6.5 L 6 6 M 14 20 l 1.25 -2.5 L 18 18 M 14 4 l 1.25 2.5 L 18 6 M 17 21 l -3 -6 h -4 M 17 3 l -3 6 l 1.5 3 M 2 12 h 6.5 L 10 9 M 20 10 l -1.5 2 l 1.5 2 M 22 12 h -6.5 L 14 15 M 4 10 l 1.5 2 L 4 14 M 7 21 l 3 -6 l -1.5 -3 M 7 3 l 3 6 h 4'
+    pipette     = 'M 12 9 l -8.414 8.414 A 2 2 0 0 0 3 18.828 v 1.344 a 2 2 0 0 1 -.586 1.414 A 2 2 0 0 1 3.828 21 h 1.344 a 2 2 0 0 0 1.414 -.586 L 15 12 M 18 9 l .4 .4 a 1 1 0 1 1 -3 3 l -3.8 -3.8 a 1 1 0 1 1 3 -3 l .4 .4 l 3.4 -3.4 a 1 1 0 1 1 3 3 z M 2 22 l .414 -.414'
+    tube        = 'M 14.5 2 v 17.5 c 0 1.4 -1.1 2.5 -2.5 2.5 c -1.4 0 -2.5 -1.1 -2.5 -2.5 V 2 M 8.5 2 h 7 M 14.5 16 h -5'
+    seringue    = 'M 18 2 l 4 4 M 17 7 l 3 -3 M 19 9 L 8.7 19.3 c -1 1 -2.5 1 -3.4 0 l -.6 -.6 c -1 -1 -1 -2.5 0 -3.4 L 15 5 M 9 11 l 4 4 M 5 19 l -3 3 M 14 4 l 6 6'
+    planning    = 'M 16 14 v 2.2 l 1.6 1 M 16 4 h 2 a 2 2 0 0 1 2 2 v .832 M 8 4 H 6 a 2 2 0 0 0 -2 2 v 14 a 2 2 0 0 0 2 2 h 2 M 22 16 A 6 6 0 1 1 10 16 A 6 6 0 1 1 22 16 Z M 9 2 H 15 A 1 1 0 0 1 16 3 V 5 A 1 1 0 0 1 15 6 H 9 A 1 1 0 0 1 8 5 V 3 A 1 1 0 0 1 9 2 Z'
+    liste       = 'M 9 2 H 15 A 1 1 0 0 1 16 3 V 5 A 1 1 0 0 1 15 6 H 9 A 1 1 0 0 1 8 5 V 3 A 1 1 0 0 1 9 2 Z M 16 4 h 2 a 2 2 0 0 1 2 2 v 14 a 2 2 0 0 1 -2 2 H 6 a 2 2 0 0 1 -2 -2 V 6 a 2 2 0 0 1 2 -2 h 2 M 12 11 h 4 M 12 16 h 4 M 8 11 h .01 M 8 16 h .01'
+    equipe      = 'M 16 21 v -2 a 4 4 0 0 0 -4 -4 H 6 a 4 4 0 0 0 -4 4 v 2 M 16 3.128 a 4 4 0 0 1 0 7.744 M 22 21 v -2 a 4 4 0 0 0 -3 -3.87 M 13 7 A 4 4 0 1 1 5 7 A 4 4 0 1 1 13 7 Z'
     box    = 'M21,8 L12,3 L3,8 L3,16 L12,21 L21,16 Z M3,8 L12,13 L21,8 M12,13 L12,21'
     moon   = 'M21,12.79 A9,9 0 1 1 11.21,3 A7,7 0 0 0 21,12.79 Z'
     sun    = 'M16,12 A4,4 0 1 1 8,12 A4,4 0 1 1 16,12 Z M12,2 L12,4 M12,20 L12,22 M4.93,4.93 L6.34,6.34 M17.66,17.66 L19.07,19.07 M2,12 L4,12 M20,12 L22,12 M4.93,19.07 L6.34,17.66 M17.66,6.34 L19.07,4.93'
@@ -322,7 +575,8 @@ $icons = @{}
 $window.FindName('KeyIco').Data = $icons.key
 $window.FindName('CogIco').Data = $icons.cog
 $window.FindName('PaletteIco').Data = $icons.palette
-$linkIcons = @{ calculatrice = 'calc'; document = 'doc'; carton = 'box'; tableau = 'sheet'; web = 'globe'; dossier = 'folder' }
+$linkIcons = @{ calculatrice = 'calc'; document = 'doc'; carton = 'box'; tableau = 'sheet'; web = 'globe'; dossier = 'folder'; rein = 'rein'; cellule = 'cellule'
+               horloge = 'horloge'; calendrier = 'calendrier'; fiole = 'fiole'; microscope = 'microscope'; thermometre = 'thermometre'; congelateur = 'congelateur'; pipette = 'pipette'; tube = 'tube'; seringue = 'seringue'; planning = 'planning'; liste = 'liste'; equipe = 'equipe' }
 
 # ---------------------------------------------------------------- colours (each PC remembers its mode and scheme; first time follows Windows, scheme Sarcelle)
 # Each scheme: id saved in scheme.txt, name shown in the picker, accent tint of the window surface,
@@ -389,10 +643,12 @@ function Show-Picker([bool]$open) {
 function Save-Pref($file, $value) { try { $null = New-Item -ItemType Directory -Force $appDir; Set-Content -LiteralPath $file $value -Encoding ASCII } catch { } }
 
 # ---------------------------------------------------------------- state and rendering
-$S = @{ Sel = -1; Rd = $null; Folder = $null; Matches = @{}; Pick = $null; PickLabel = ''; Visible = $false; Quitting = $false; Capture = $false }
+$S = @{ Sel = -1; Rd = $null; Kind = $null; Where = $null; Folder = $null; Matches = @{}; Files = @(); Pick = $null; PickKind = $null; PickLabel = ''; FolderPick = $null
+        Loading = $false; Visible = $false; Quitting = $false; Capture = $false; Dialog = $false }
 $fg = [Windows.Controls.TextBlock]::ForegroundProperty
 
 function Set-Message($text, [switch]$IsError) {
+    $S.MsgText = $text; $S.MsgErr = [bool]$IsError   # remembered, so a hover hint can put it back
     $Message.Text = $text
     $Message.Visibility = if ($text) { 'Visible' } else { 'Collapsed' }
     $Message.SetResourceReference($fg, $(if ($IsError) { 'Error' } else { 'Muted' }))
@@ -401,7 +657,7 @@ function Set-Message($text, [switch]$IsError) {
 # Indexes of the rows that can be used right now
 function Get-Live {
     if ($S.Pick) { return 0..($S.Pick.Count - 1) }
-    if ($S.Folder) { for ($i = 0; $i -lt $buttons.Count; $i++) { if ($buttons[$i].Type -eq 'folder' -or $S.Matches[$i].Count) { $i } } }
+    if ($S.Folder -and $S.Files.Count) { 0..($S.Files.Count - 1) }   # the folder's files
 }
 
 function New-Row($i, $geo, $text, $sub, $on, $key) {
@@ -410,46 +666,111 @@ function New-Row($i, $geo, $text, $sub, $on, $key) {
 }
 
 function Render {
+    $pickingFolder = $S.PickKind -eq 'folder'
+    $ok = $S.Folder -or $pickingFolder -or $S.Loading   # nothing to report as missing
     $Header.Visibility = if ($S.Rd) { 'Visible' } else { 'Collapsed' }
-    $RdName.Text = if ($S.Folder) { $S.Folder.Name } else { "$($S.Rd) introuvable" }
-    $RdName.SetResourceReference($fg, $(if ($S.Folder) { 'Text' } else { 'Error' }))
-    $RdPath.Text = if ($S.Folder) { $S.Folder.FullName } else { "dans $root" }
+    $RdName.Text = if ($S.Folder) { $S.Folder.Name } elseif ($ok) { $S.Rd } else { "$($S.Rd) introuvable" }
+    $RdName.SetResourceReference($fg, $(if ($ok) { 'Text' } else { 'Error' }))
+    $RdPath.Text = if ($S.Folder) { $S.Folder.FullName } else { "dans $($S.Where)" }
     $live = @(Get-Live)
-    if ($S.Pick) {
-        Set-Message "$($S.Pick.Count) fichiers $($S.PickLabel) trouvés - choisissez-en un (Échap pour revenir)"
-        $Rows.ItemsSource = @(for ($i = 0; $i -lt $S.Pick.Count; $i++) {
-            New-Row $i $icons.sheet $S.Pick[$i].Name $S.Pick[$i].LastWriteTime.ToString('yyyy-MM-dd HH:mm') $true ''
-        })
+    Build-Tiles $pickingFolder
+    if ($S.Pick) {   # a list to choose from: folders (several projects) or files (several Manip...)
+        $n = $S.Pick.Count
+        $first = [math]::Max(0, [math]::Min($S.Sel - 3, $n - $pickRows))   # show $pickRows lines around the selection
+        $last  = [math]::Min($n, $first + $pickRows) - 1
+        $where = if ($n -gt $pickRows) { " · lignes $($first + 1)-$($last + 1) sur $n (↑↓ pour défiler)" } else { '' }
+        if ($pickingFolder) {
+            Set-Message $(if ($S.PickTotal -gt $n) { "$($S.PickTotal) dossiers trouvés pour $($S.Rd) - les $n premiers ici. Ajoutez le numéro pour les autres (ex. $($S.Rd)45)$where" }
+                          else { "$n dossiers trouvés pour $($S.Rd) - choisissez-en un$where" })
+            $Rows.ItemsSource = @(for ($i = $first; $i -le $last; $i++) { New-Row $i $icons.folder $S.Pick[$i].Name $S.Pick[$i].Enterprise $true '' })
+        } else {
+            Set-Message "$n fichiers $($S.PickLabel) trouvés - choisissez-en un (Échap pour revenir)$where"
+            $Rows.ItemsSource = @(for ($i = $first; $i -le $last; $i++) {
+                New-Row $i $icons[(Get-FileIcon $S.Pick[$i].Extension)] $S.Pick[$i].Name $S.Pick[$i].LastWriteTime.ToString('yyyy-MM-dd HH:mm') $true ''
+            })
+        }
         return
     }
-    Set-Message $(if (-not $S.Rd) { 'Tapez un numéro de RD, par ex. 7 ou RD007' })
-    $Rows.ItemsSource = @(for ($i = 0; $i -lt $buttons.Count; $i++) {
-        $b = $buttons[$i]; $m = $S.Matches[$i]; $on = $live -contains $i
+    $hint = if ($projRoot) { 'Tapez un numéro de RD ou un code projet' } else { 'Tapez un numéro de RD' }
+    if (-not $S.Rd) { Set-Message $hint }
+    elseif ($S.Loading) { Set-Message 'Chargement de la liste des projets…' }
+    elseif ($S.Kind -eq 'project' -and $projFail) { Set-Message "Emplacement des projets inaccessible : $projRoot" -IsError }
+    else { Set-Message '' }
+    $all = @(for ($j = 0; $j -lt $S.Files.Count; $j++) {   # the folder's own files, by type (icon only)
+        $f = $S.Files[$j]
+        New-Row $j $icons[(Get-FileIcon $f.Extension)] $f.Name $f.LastWriteTime.ToString('yyyy-MM-dd') $true ''
+    })
+    # show $pickRows lines around the selection
+    $pos = [math]::Max(0, $S.Sel)
+    $first = [math]::Max(0, [math]::Min($pos - 3, $all.Count - $pickRows))
+    $shown = @($all | Select-Object -Skip $first -First $pickRows)
+    $where = if ($all.Count -gt $pickRows) { "lignes $($first + 1)-$($first + $shown.Count) sur $($all.Count) (↑↓ pour défiler)" } else { '' }
+    if ($S.FolderPick) { Set-Message (@('Échap pour revenir à la liste des dossiers', $where) -ne '' -join ' · ') }
+    elseif ($S.Folder) { Set-Message $(if ($S.Files.Count) { $where } elseif (@($S.Matches.Values | Where-Object { $_.Count }).Count) { 'Pas d''autre fichier à la racine de ce dossier' } else { 'Aucun fichier à la racine de ce dossier' }) }
+    $Rows.ItemsSource = $shown
+}
+
+function Build-Tiles([bool]$hidden) {   # one tile per set-up button; Entrée opens the folder while no file is highlighted
+    $Tiles.Visibility = if ($hidden) { 'Collapsed' } else { 'Visible' }
+    $Tiles.ItemsSource = @(for ($i = 0; $i -lt $buttons.Count; $i++) {
+        $b = $buttons[$i]; $m = @($S.Matches[$i])
+        if ($b.Type -notin 'folder', 'file') { continue }   # buttons of any other type are not set up yet: hidden
         $key = if ($b.Shortcut) { "Ctrl+$("$($b.Shortcut)".ToUpper())" } else { "Ctrl+$($i + 1)" }
-        switch ($b.Type) {   # buttons of any other type are not set up yet: hidden
-            'folder' { New-Row $i $icons.folder 'Ouvrir le dossier' '' $on $key }
-            'file'   {
-                $sub = if (-not $S.Folder) { '' } elseif ($m.Count -gt 1) { "$($m.Count) fichiers" } elseif ($m) { $m[0].Name } else { 'aucun fichier trouvé' }
-                New-Row $i $icons.sheet "Ouvrir $($b.Label)" $sub $on $key
-            }
+        if ($b.Type -eq 'folder') {
+            $on = [bool]$S.Folder
+            $sel = $on -and $S.Sel -lt 0 -and -not $S.Pick
+            $geo = $icons.folder; $sub = if ($on) { 'Ouvrir' } else { '' }
+            $tip = 'Ouvrir le dossier dans l''Explorateur'
+        } else {
+            $on = $S.Folder -and $m.Count -gt 0
+            $sel = $false
+            $ext = @($b.Extensions)[0]; if (-not $ext) { $ext = '.xlsx' }
+            $geo = $icons[(Get-FileIcon $ext)]
+            $sub = if (-not $S.Folder) { '' } elseif ($m.Count -gt 1) { "$($m.Count) fichiers" } elseif ($m.Count) { $m[0].Name } else { 'aucun fichier' }
+            $tip = "Ouvrir le fichier $($b.Label) (nom contenant « $($b.Pattern) »)"
         }
+        [pscustomobject]@{ I = $i; Geo = $geo; Text = $b.Label; Sub = $sub; Tip = $tip; On = [bool]$on; Sel = [bool]$sel
+                           Hint = $(if ($sel) { 'Entrée' } else { $key }) }
     })
 }
 
 function Update-FromInput {
-    $S.Pick = $null
-    $S.Rd = Get-RdName $Box.Text
-    $S.Folder = if ($S.Rd) { Find-RdFolder $S.Rd }
+    $S.Pick = $null; $S.PickKind = $null; $S.FolderPick = $null; $S.Folder = $null; $S.Loading = $false
+    $q = Get-Query $Box.Text
+    $S.Kind = $q.Kind; $S.Rd = $q.Label; $S.Where = $root
+    if ($q.Kind -eq 'rd') { $S.Folder = Find-RdFolder $q.Label }
+    elseif ($q.Kind -eq 'project') {
+        if (-not $projRoot) { $S.Rd = $null }   # no project location set up: treat like an empty box
+        else {
+            $S.Where = $projRoot
+            $found = @(Find-Projects $q)
+            if ($null -eq $projIndex) { $S.Loading = $true; Start-ProjectScan }
+            elseif ($found.Count -eq 1) { $S.Folder = $found[0] }
+            elseif ($found.Count -gt 1) { $S.Pick = @($found | Select-Object -First $projListMax); $S.PickKind = 'folder'; $S.PickTotal = $found.Count }
+        }
+    }
+    Select-Folder $S.Folder
+}
+
+function Select-Folder($folder) {   # reads the chosen folder's files, gives the tiles theirs, lists the others below
+    $S.Folder = $folder
     $S.Matches = @{}
-    if ($S.Folder) { for ($i = 0; $i -lt $buttons.Count; $i++) { if ($buttons[$i].Type -eq 'file') { $S.Matches[$i] = Find-Files $S.Folder $buttons[$i] } } }
-    $S.Sel = (@(Get-Live) + -1)[0]
+    $all = @(if ($folder) { Get-FolderFiles $folder })
+    if ($folder) { for ($i = 0; $i -lt $buttons.Count; $i++) { if ($buttons[$i].Type -eq 'file') { $S.Matches[$i] = @(Find-Files $all $buttons[$i]) } } }
+    # files already reachable from a tile (Manip, Study Plan, Rapport final ...) are not listed again below the tiles
+    $onTiles = @($S.Matches.Values | ForEach-Object { $_ } | ForEach-Object { $_.FullName })
+    $S.Files = @($all | Where-Object { $onTiles -notcontains $_.FullName })
+    $S.Sel = if ($S.Pick) { 0 } else { -1 }
     Render
 }
 
 function Move-Sel($step) {
     $live = @(Get-Live)
     if (-not $live.Count) { return }
-    $S.Sel = $live[([array]::IndexOf($live, $S.Sel) + $step + $live.Count) % $live.Count]
+    $idx = [array]::IndexOf($live, $S.Sel)
+    if ($idx -lt 0) { $S.Sel = $live[$(if ($step -gt 0) { 0 } else { $live.Count - 1 })] }
+    elseif (-not $S.Pick -and ($idx + $step -lt 0 -or $idx + $step -ge $live.Count)) { $S.Sel = -1 }   # past either end: back to the tiles (Entrée = folder)
+    else { $S.Sel = $live[($idx + $step + $live.Count) % $live.Count] }
     Render
 }
 
@@ -465,8 +786,202 @@ function Build-Links {
     $LinksTitle.Visibility = if ($Links.Items.Count) { 'Visible' } else { 'Collapsed' }
 }
 
+# ---------------------------------------------------------------- "Mes liens": each person's own links, saved on this PC only
+# Up to 6; Alt+7, 8, 9, 0 open the first 4. Kind (folder/file) is stored so the bar never has to check the network to draw them.
+$myMax  = 6
+$myKeys = '7', '8', '9', '0'
+$myList = @()
+
+function Read-MyLinks {
+    $json = $null
+    try { $json = Get-Content -LiteralPath $myLinksFile -Raw -Encoding UTF8 -EA Stop | ConvertFrom-Json } catch { }
+    $list = foreach ($l in $json) {
+        if ("$($l.Path)".Trim()) { [pscustomobject]@{ Name = "$($l.Name)"; Path = "$($l.Path)"; Kind = "$($l.Kind)" } }
+    }
+    $script:myList = @($list | Select-Object -First $myMax)
+}
+
+function Save-MyLinks {
+    try {
+        $null = New-Item -ItemType Directory -Force $appDir
+        ConvertTo-Json -InputObject @($myList) | Set-Content -LiteralPath $myLinksFile -Encoding UTF8 -EA Stop
+    } catch { Set-Message "Impossible d'enregistrer vos liens - $($_.Exception.Message)" -IsError }
+    Build-MyLinks
+}
+
+function Build-MyLinks {
+    $MyLinks.ItemsSource = @(for ($i = 0; $i -lt $myList.Count; $i++) {
+        $l = $myList[$i]
+        $n = if ($i -lt $myKeys.Count) { $myKeys[$i] } else { '' }
+        $ico = if ($l.Kind -eq 'folder') { 'folder' } elseif ([IO.Path]::GetExtension($l.Path) -match '^\.(xls|xlsx|xlsm|csv)$') { 'sheet' } else { 'doc' }
+        $tip = "Clic droit : renommer, déplacer, supprimer`n" + $l.Path + $(if ($n) { "   (Alt+$n)" })
+        [pscustomobject]@{ I = $i; N = $n; Name = $l.Name; Path = $l.Path; Tip = $tip; Geo = $icons[$ico] }
+    })
+    $AddLink.Visibility = if ($myList.Count -lt $myMax) { 'Visible' } else { 'Collapsed' }
+}
+
+# Runs a window that takes the focus (browse, rename) without the bar hiding itself meanwhile; returns what the block returns
+function Invoke-Modal([scriptblock]$block) {
+    $S.Dialog = $true
+    try { & $block }
+    finally {
+        $S.Dialog = $false
+        if ($S.Visible) { [void]$window.Activate(); [void]$Box.Focus() }
+    }
+}
+
+function Add-MyLink([bool]$folder) {
+    $title = if ($folder) { 'Choisir un dossier pour Mes liens' } else { 'Choisir un fichier pour Mes liens' }
+    $owner = (New-Object Windows.Interop.WindowInteropHelper $window).Handle
+    $path = $null
+    try { $path = Invoke-Modal { [RdPicker]::Pick($owner, $folder, $title) } }
+    catch { return Set-Message "Impossible d'ouvrir la fenêtre de choix - $($_.Exception.Message)" -IsError }
+    if (-not $path) { return }   # cancelled
+    $name = if ($folder) { Split-Path $path -Leaf } else { [IO.Path]::GetFileNameWithoutExtension($path) }
+    if (-not $name) { $name = $path }   # e.g. a whole drive
+    $script:myList = @($myList) + [pscustomobject]@{ Name = $name; Path = $path; Kind = $(if ($folder) { 'folder' } else { 'file' }) }
+    Save-MyLinks
+    Set-Message "Lien ajouté : $name. Clic droit dessus pour le renommer, le déplacer ou le supprimer."
+}
+
+function Read-NewName($current) {   # small box above the bar; returns the new name, or nothing if cancelled
+    $dlg = [Windows.Markup.XamlReader]::Parse(@'
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        WindowStyle="None" AllowsTransparency="True" Background="Transparent" SizeToContent="WidthAndHeight" ResizeMode="NoResize"
+        ShowInTaskbar="False" WindowStartupLocation="CenterOwner" FontFamily="Segoe UI">
+  <Border Margin="16" Padding="16,12" CornerRadius="8" BorderThickness="1" Background="{DynamicResource Box}" BorderBrush="{DynamicResource CardLine}">
+    <Border.Effect><DropShadowEffect BlurRadius="16" ShadowDepth="3" Opacity="0.25"/></Border.Effect>
+    <StackPanel Width="300">
+      <TextBlock Text="Renommer le lien" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource Text}"/>
+      <TextBox x:Name="NameBox" Margin="0,8,0,0" Padding="4,3" FontSize="14"/>
+      <TextBlock Text="Entrée = valider · Échap = annuler" FontSize="11" Margin="0,6,0,0" Foreground="{DynamicResource Muted}"/>
+    </StackPanel>
+  </Border>
+</Window>
+'@)
+    $dlg.Resources.MergedDictionaries.Add($window.Resources)   # same colours as the bar
+    $dlg.Owner = $window
+    $nameBox = $dlg.FindName('NameBox')
+    $nameBox.Text = $current
+    $dlg.Add_ContentRendered({ [void]$nameBox.Focus(); $nameBox.SelectAll() })
+    $dlg.Add_PreviewKeyDown({
+        param($src, $e)
+        if ($e.Key -eq 'Return') { $e.Handled = $true; $dlg.DialogResult = $true }
+        elseif ($e.Key -eq 'Escape') { $e.Handled = $true; $dlg.DialogResult = $false }
+    })
+    if ($dlg.ShowDialog() -and $nameBox.Text.Trim()) { $nameBox.Text.Trim() }
+}
+
+function Edit-MyLink($action) {   # acts on the link that was right-clicked ($S.EditIdx)
+    $i = $S.EditIdx
+    $list = [Collections.ArrayList]@($myList)
+    if ($i -lt 0 -or $i -ge $list.Count) { return }
+    switch ($action) {
+        'rename' {
+            $new = Invoke-Modal { Read-NewName $list[$i].Name }
+            if (-not $new) { return }
+            $list[$i] = [pscustomobject]@{ Name = $new; Path = $list[$i].Path; Kind = $list[$i].Kind }
+        }
+        'up'     { if ($i -gt 0) { $list[$i], $list[$i - 1] = $list[$i - 1], $list[$i] } }
+        'down'   { if ($i -lt $list.Count - 1) { $list[$i], $list[$i + 1] = $list[$i + 1], $list[$i] } }
+        'remove' { $list.RemoveAt($i) }
+    }
+    $script:myList = @($list)
+    Save-MyLinks
+}
+
+# Menus: "Ajouter un lien" (folder or file) and right-click on one of "Mes liens"
+function New-Menu($items) {   # each item: label, action
+    $menu = New-Object Windows.Controls.ContextMenu
+    foreach ($it in $items) {
+        $mi = New-Object Windows.Controls.MenuItem
+        $mi.Header = $it[0]
+        $mi.Add_Click($it[1])
+        [void]$menu.Items.Add($mi)
+    }
+    # if the person clicked away from the bar while the menu was open, hide the bar as usual
+    $menu.Add_Closed({
+        [void]$window.Dispatcher.BeginInvoke([Windows.Threading.DispatcherPriority]::ApplicationIdle,
+            [Action]{ if ($S.Visible -and -not $window.IsActive -and -not $S.Dialog) { Hide-Bar } })
+    })
+    $menu
+}
+
+function Show-Menu($menu, $target) {
+    $menu.PlacementTarget = $target
+    $menu.Placement = 'MousePoint'
+    $menu.IsOpen = $true
+}
+
+$addMenu = New-Menu @(
+    , @('Ajouter un dossier…', { Add-MyLink $true })
+    , @('Ajouter un fichier…', { Add-MyLink $false })
+)
+$editMenu = New-Menu @(
+    , @('Renommer…', { Edit-MyLink 'rename' })
+    , @('Monter',    { Edit-MyLink 'up' })
+    , @('Descendre', { Edit-MyLink 'down' })
+    , @('Supprimer', { Edit-MyLink 'remove' })
+)
+
+# ---------------------------------------------------------------- project folders (ClientPath): list kept up to date in the background
+# Reading 50-300 enterprise folders on the NAS takes seconds, so it is done out of sight; typing then only searches the list.
+$projIndex = $null; $projIndexRoot = $null; $projFail = $false; $projJob = $null; $projStamp = [datetime]::MinValue
+
+function Start-ProjectScan {
+    if (-not $projRoot -or $projJob) { return }
+    $ps = [powershell]::Create()
+    [void]$ps.AddScript({
+        param($root)
+        foreach ($ent in [IO.Directory]::GetDirectories($root)) {
+            try {
+                foreach ($p in [IO.Directory]::GetDirectories($ent)) {
+                    [pscustomobject]@{ Name = [IO.Path]::GetFileName($p); FullName = $p; Enterprise = [IO.Path]::GetFileName($ent) }
+                }
+            } catch { }   # an enterprise folder we may not open: skip it
+        }
+    }).AddArgument($projRoot)
+    $script:projJob = @{ PS = $ps; Handle = $ps.BeginInvoke(); Root = $projRoot }
+    $scanTimer.Start()
+}
+
+$scanTimer = New-Object Windows.Threading.DispatcherTimer
+$scanTimer.Interval = [TimeSpan]::FromMilliseconds(300)
+$scanTimer.Add_Tick({   # checks whether the background reading has finished
+    if (-not $projJob -or -not $projJob.Handle.IsCompleted) { return }
+    $scanTimer.Stop()
+    $found = @()
+    try { $found = @($projJob.PS.EndInvoke($projJob.Handle)) } catch { }
+    $script:projFail = $projJob.PS.HadErrors -and -not $found.Count   # location unreachable
+    $script:projIndex = @($found | Sort-Object Name)
+    $script:projIndexRoot = $projJob.Root
+    $projJob.PS.Dispose()
+    $script:projJob = $null
+    $script:projStamp = Get-Date
+    if ($S.Visible -and $S.Loading) { Update-FromInput }   # someone was waiting for the list
+})
+
+function Update-ProjectIndex {   # on opening the bar: forget the list if the location changed, refresh it if older than a minute
+    if ($projRoot -ne $projIndexRoot) { $script:projIndex = $null; $script:projIndexRoot = $projRoot; $script:projStamp = [datetime]::MinValue }
+    if ($projRoot -and ((Get-Date) - $projStamp).TotalSeconds -gt 60) { Start-ProjectScan }
+}
+
+# ALP2 matches ALP2, ALP002, ALP-002, "Essai ALP002"; not XALP002 or ALP0021.
+# Letters alone match every code starting with them: AL finds ALP001, ALP002, ALB003 ... sorted by code, then number.
+function Find-Projects($q) {
+    $start = '(?<![a-z])' + [regex]::Escape($q.Letters)
+    $any = $start + '([a-z]{0,6})[\s_-]*(\d+)'   # a code starting with the letters: rest of its letters, then its number
+    $rx = if ($null -eq $q.Number) { $any } else { $start + '[\s_-]*0*' + $q.Number + '(?!\d)' }
+    @($projIndex | Where-Object { $_.Name -match $rx } |
+        Sort-Object @{ Expression = { [regex]::Match($_.Name, $any, 'IgnoreCase').Groups[1].Value } },
+                    @{ Expression = { [long][regex]::Match($_.Name, $any, 'IgnoreCase').Groups[2].Value } }, Name)
+}
+$projListMax = 30   # longest list of folders; beyond that, the person is asked to type the number
+$pickRows = 8       # lines of a list shown at once (the bar would not fit on screen otherwise)
+
 # ---------------------------------------------------------------- actions
 function Hide-Bar {
+    $S.HoverSaved = $null
     if ($S.Capture) { Complete-Capture '' }
     Show-Picker $false
     if ($S.Visible) { $S.Visible = $false; $window.Hide() }
@@ -475,7 +990,10 @@ function Hide-Bar {
 function Show-Bar {
     if (-not $S.Visible) {
         Read-Config
+        Update-ProjectIndex
         Build-Links
+        Read-MyLinks
+        Build-MyLinks
         if ($Box.Text) { $Box.Text = '' } else { Update-FromInput }
         $area = [Windows.SystemParameters]::WorkArea
         $window.Left = $area.Left + ($area.Width - $window.Width) / 2
@@ -499,12 +1017,20 @@ function Open-AppFiles {
 }
 
 function Invoke-Row($i) {
+    if ($S.PickKind -eq 'folder') {   # one of several project folders chosen: remember the list for Échap
+        $S.FolderPick = $S.Pick; $S.Pick = $null; $S.PickKind = $null
+        return Select-Folder $S.FolderPick[$i]
+    }
     if ($S.Pick) { return Open-Target $S.Pick[$i].FullName }
-    if (@(Get-Live) -notcontains $i) { return }
+    if (@(Get-Live) -contains $i) { Open-Target $S.Files[$i].FullName }   # one of the folder's files
+}
+
+function Invoke-Button($i) {   # a tile: open the folder, the one matching file, or the list of matching files
+    if (-not $S.Folder) { return }
     $m = @($S.Matches[$i])
     if ($buttons[$i].Type -eq 'folder') { Open-Target $S.Folder.FullName }
     elseif ($m.Count -eq 1) { Open-Target $m[0].FullName }
-    else { $S.Pick = $m; $S.PickLabel = $buttons[$i].Label; $S.Sel = 0; Render }
+    elseif ($m.Count -gt 1) { $S.Pick = $m; $S.PickLabel = $buttons[$i].Label; $S.Sel = 0; Render }
 }
 
 # ---------------------------------------------------------------- changing the shortcut (keyboard button)
@@ -539,7 +1065,31 @@ function Complete-Capture($candidate, [switch]$Reset) {
 # ---------------------------------------------------------------- events
 $Box.Add_TextChanged({ Update-FromInput })
 $Rows.Add_MouseLeftButtonUp({ param($src, $e) $d = $e.OriginalSource.DataContext; if ($d.On) { Invoke-Row $d.I } })
+$Tiles.Add_MouseLeftButtonUp({ param($src, $e) $d = $e.OriginalSource.DataContext; if ($d.On) { Invoke-Button $d.I } })
+$Rows.Add_PreviewMouseWheel({ param($src, $e) if ($S.Pick -or $S.Folder) { $e.Handled = $true; Move-Sel $(if ($e.Delta -gt 0) { -1 } else { 1 }) } })   # scroll long lists
 $Links.Add_MouseLeftButtonUp({ param($src, $e) $d = $e.OriginalSource.DataContext; if ($d.Path) { Open-Target $d.Path } })
+$MyLinks.Add_MouseLeftButtonUp({ param($src, $e) $d = $e.OriginalSource.DataContext; if ($d.Path) { Open-Target $d.Path } })
+$MyLinks.Add_MouseRightButtonUp({
+    param($src, $e)
+    $d = $e.OriginalSource.DataContext
+    if ($null -eq $d.I) { return }
+    $e.Handled = $true
+    $S.EditIdx = $d.I
+    $editMenu.Items[1].IsEnabled = $d.I -gt 0                       # Monter
+    $editMenu.Items[2].IsEnabled = $d.I -lt $myList.Count - 1      # Descendre
+    Show-Menu $editMenu $MyLinks
+})
+$AddLink.Add_MouseLeftButtonUp({ Show-Menu $addMenu $AddLink })
+# While the mouse is over "Mes liens", the footer says what right-click does; leaving puts the previous message back
+$myHoverHint = 'Mes liens : clic droit sur un lien pour le renommer, le déplacer ou le supprimer · Alt+7 à Alt+0 ouvrent les 4 premiers'
+$MyLinks.Add_MouseEnter({
+    if ($S.MsgText -ne $myHoverHint) { $S.HoverSaved = @{ Text = $S.MsgText; Err = $S.MsgErr } }
+    Set-Message $myHoverHint
+})
+$MyLinks.Add_MouseLeave({
+    $saved = $S.HoverSaved; $S.HoverSaved = $null
+    if ($saved -and $S.MsgText -eq $myHoverHint) { Set-Message $saved.Text -IsError:$saved.Err }   # only if nothing replaced the hint meanwhile
+})
 $Cog.Add_MouseLeftButtonUp({ Open-AppFiles })
 $KeyBtn.Add_MouseLeftButtonUp({ if ($S.Capture) { Complete-Capture ''; Render } else { Start-Capture } })
 $ThemeBtn.Add_MouseLeftButtonUp({ $script:themeName = if ($themeName -eq 'dark') { 'light' } else { 'dark' }; Set-Look; Save-Pref $themeFile $themeName })
@@ -552,7 +1102,9 @@ $Swatches.Add_MouseLeftButtonUp({
     Set-Look
     Save-Pref $schemeFile $Schemes[$d.I].Id
 })
-$window.Add_Deactivated({ Hide-Bar })   # clicking elsewhere hides the bar, like the Start menu
+$window.Add_Deactivated({   # clicking elsewhere hides the bar, like the Start menu (not while one of its own windows or menus is open)
+    if (-not ($S.Dialog -or $addMenu.IsOpen -or $editMenu.IsOpen)) { Hide-Bar }
+})
 $window.Add_Closing({ param($src, $e) if (-not $S.Quitting) { $e.Cancel = $true; Hide-Bar } })   # Alt+F4 hides
 
 $window.Add_PreviewKeyDown({
@@ -572,20 +1124,29 @@ $window.Add_PreviewKeyDown({
 
     if ($key -eq 'Escape' -and $Picker.Visibility -eq 'Visible') { return Show-Picker $false }
     switch ($key) {
-        'Escape' { if ($S.Pick) { $S.Pick = $null; $S.Sel = (@(Get-Live) + -1)[0]; Render } else { Hide-Bar }; return }
+        'Escape' {
+            if ($S.Pick -and $S.PickKind -ne 'folder') { $S.Pick = $null; $S.Sel = -1; Render }   # list of matching files -> folder view
+            elseif ($S.FolderPick -and -not $S.Pick) {                                                                 # buttons -> folders list
+                $S.Pick = $S.FolderPick; $S.PickKind = 'folder'; $S.FolderPick = $null; $S.Folder = $null; $S.Sel = 0; Render
+            }
+            else { Hide-Bar }
+            return
+        }
         'Down'   { return Move-Sel 1 }
         'Up'     { return Move-Sel -1 }
-        'Return' { if ($S.Sel -ge 0) { Invoke-Row $S.Sel }; return }
+        'Return' { if ($S.Sel -ge 0) { Invoke-Row $S.Sel } elseif ($S.Folder) { Open-Target $S.Folder.FullName }; return }
     }
     $digit = if ($key -match '^(D|NumPad)(\d)$') { [int]$Matches[2] }
-    if ($digit -and $mods -eq 'Alt') {
+    if ($null -ne $digit -and $mods -eq 'Alt') {   # Alt+1..6 = shared links, Alt+7 8 9 0 = the first 4 of "Mes liens"
         $ql = @($config.QuickLinks)
-        if ($digit -le $ql.Count -and "$($ql[$digit - 1].Path)".Trim()) { Open-Target $ql[$digit - 1].Path }
+        $mine = [array]::IndexOf($myKeys, "$digit")
+        if ($mine -ge 0) { if ($mine -lt $myList.Count) { Open-Target $myList[$mine].Path } }
+        elseif ($digit -le $ql.Count -and "$($ql[$digit - 1].Path)".Trim()) { Open-Target $ql[$digit - 1].Path }
         return
     }
     if ($mods -eq 'Control' -and -not $S.Pick) {
         for ($i = 0; $i -lt $buttons.Count; $i++) {
-            if ($digit -eq $i + 1 -or ($buttons[$i].Shortcut -and $key -eq "$($buttons[$i].Shortcut)")) { return Invoke-Row $i }
+            if ($digit -eq $i + 1 -or ($buttons[$i].Shortcut -and $key -eq "$($buttons[$i].Shortcut)")) { return Invoke-Button $i }
         }
     }
     $e.Handled = $false
@@ -602,22 +1163,9 @@ Set-Look
 
 # ---------------------------------------------------------------- tray icon and menu
 [Windows.Forms.Application]::EnableVisualStyles()
-# icon: R and D stacked diagonally on a rounded square in the Sarcelle accent
-$bmp = New-Object Drawing.Bitmap 32, 32
-$g = [Drawing.Graphics]::FromImage($bmp)
-$g.SmoothingMode = 'AntiAlias'
-$g.TextRenderingHint = 'AntiAliasGridFit'
-$square = New-Object Drawing.Drawing2D.GraphicsPath
-$square.AddArc(1, 1, 14, 14, 180, 90); $square.AddArc(17, 1, 14, 14, 270, 90)
-$square.AddArc(17, 17, 14, 14, 0, 90); $square.AddArc(1, 17, 14, 14, 90, 90)
-$square.CloseFigure()
-$g.FillPath((New-Object Drawing.SolidBrush ([Drawing.ColorTranslator]::FromHtml(($Schemes | Where-Object Id -eq 'sarcelle').L[3]))), $square)
-$fmt = New-Object Drawing.StringFormat
-$fmt.Alignment = $fmt.LineAlignment = 'Center'
-$font = New-Object Drawing.Font('Segoe UI', 14, 'Bold', 'Pixel')
-$g.DrawString('R', $font, [Drawing.Brushes]::White, (New-Object Drawing.RectangleF(1, 1.5, 20, 20)), $fmt)
-$g.DrawString('D', $font, [Drawing.Brushes]::White, (New-Object Drawing.RectangleF(10.5, 11, 20, 20)), $fmt)
-$g.Dispose()
+# icon: the kidney with calyces, white on the Sarcelle teal (same drawing as RD_Browser.ico)
+$iconStream = [IO.MemoryStream]::new((New-AppIconPng 32))
+$bmp = New-Object Drawing.Bitmap $iconStream
 
 $menu = New-Object Windows.Forms.ContextMenuStrip
 function Add-MenuItem($text, $action) { $item = $menu.Items.Add($text); $item.Add_Click($action); $item }
@@ -651,4 +1199,5 @@ if (-not $hk) {
     $tray.ShowBalloonTip(5000, 'RD Browser est prêt', "Appuyez sur $hotkey n'importe où pour l'ouvrir. Il reste ici, près de l'horloge.", 'Info')
 }
 
+Update-ProjectIndex   # start reading the project folders now, so the list is ready at first use
 [System.Windows.Threading.Dispatcher]::Run()

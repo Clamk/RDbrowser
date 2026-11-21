@@ -16,7 +16,7 @@ if (Test-Path -LiteralPath $configPath) {
 }
 if (-not $config) {
     $config = [pscustomobject]@{
-        RootPath = ''
+        RDPath = ''
         Buttons  = @(
             [pscustomobject]@{ Label = 'Dossier'; Type = 'folder' }
             [pscustomobject]@{ Label = 'Manip';  Type = 'file'; Pattern = 'manip'; Extensions = @('.xlsx', '.xlsm', '.xls') }
@@ -24,8 +24,8 @@ if (-not $config) {
     }
 }
 
-# Empty RootPath = the folder this script is in. Relative paths are relative to the script.
-$root = [string]$config.RootPath
+# Empty RDPath = the folder this script is in. Relative paths are relative to the script. (Former name RootPath still read.)
+$root = if ($null -ne $config.RDPath) { [string]$config.RDPath } else { [string]$config.RootPath }
 if ([string]::IsNullOrWhiteSpace($root))              { $root = $scriptDir }
 elseif (-not [System.IO.Path]::IsPathRooted($root))   { $root = Join-Path $scriptDir $root }
 try { $root = [System.IO.Path]::GetFullPath($root) } catch { }
