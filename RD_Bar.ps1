@@ -26,24 +26,54 @@ $kidneyPath = 'M13,3 C17.5,3 20,7 20,12 C20,17 17.5,21 13,21 C9,21 6,19 6,16 C6,
 $icoFile    = Join-Path $appDir 'RD_Browser.ico'
 
 function New-AppIconPng([int]$size) {   # the icon drawn at one size, as PNG bytes
-    Add-Type -AssemblyName PresentationCore, WindowsBase
-    $k = $size * 0.72 / 18                                # the kidney (18 units tall) fills about 72 % of the square
-    $dv = New-Object Windows.Media.DrawingVisual
-    $dc = $dv.RenderOpen()
-    $teal = New-Object Windows.Media.SolidColorBrush ([Windows.Media.Color]::FromRgb(0x0E, 0x7C, 0x7B))
-    $dc.DrawRoundedRectangle($teal, $null, (New-Object Windows.Rect(0, 0, $size, $size)), $size * 0.22, $size * 0.22)
-    $pen = New-Object Windows.Media.Pen([Windows.Media.Brushes]::White, [Math]::Max(1.4, $size * 0.072) / $k)
-    $pen.StartLineCap = 'Round'; $pen.EndLineCap = 'Round'; $pen.LineJoin = 'Round'
-    $dc.PushTransform((New-Object Windows.Media.TranslateTransform(($size / 2 - 13 * $k), ($size / 2 - 12 * $k))))
-    $dc.PushTransform((New-Object Windows.Media.ScaleTransform($k, $k)))
-    $dc.DrawGeometry($null, $pen, [Windows.Media.Geometry]::Parse($kidneyPath))
-    $dc.Pop(); $dc.Pop(); $dc.Close()
-    $rtb = New-Object Windows.Media.Imaging.RenderTargetBitmap($size, $size, 96, 96, [Windows.Media.PixelFormats]::Pbgra32)
-    $rtb.Render($dv)
-    $enc = New-Object Windows.Media.Imaging.PngBitmapEncoder
-    $enc.Frames.Add([Windows.Media.Imaging.BitmapFrame]::Create($rtb))
+    # Drawn with System.Drawing, like the former "RD" icon: the kidney outline ($kidneyPath) is only curves and lines,
+    # so it is rebuilt here segment by segment (same points), then scaled into the teal square.
+    Add-Type -AssemblyName System.Drawing
+    $bmp = New-Object Drawing.Bitmap($size, $size, [Drawing.Imaging.PixelFormat]::Format32bppArgb)
+    $g = [Drawing.Graphics]::FromImage($bmp)
+    $g.SmoothingMode = [Drawing.Drawing2D.SmoothingMode]::AntiAlias
+    $g.PixelOffsetMode = [Drawing.Drawing2D.PixelOffsetMode]::HighQuality
+    $g.Clear([Drawing.Color]::Transparent)
+
+    $d = [float]($size * 0.44)                            # rounded square: corner diameter
+    $e = [float]($size - $d)
+    $z = [float]0
+    $square = New-Object Drawing.Drawing2D.GraphicsPath
+    $square.AddArc((New-Object Drawing.RectangleF($z, $z, $d, $d)), [float]180, [float]90)
+    $square.AddArc((New-Object Drawing.RectangleF($e, $z, $d, $d)), [float]270, [float]90)
+    $square.AddArc((New-Object Drawing.RectangleF($e, $e, $d, $d)), [float]0, [float]90)
+    $square.AddArc((New-Object Drawing.RectangleF($z, $e, $d, $d)), [float]90, [float]90)
+    $square.CloseFigure()
+    $teal = New-Object Drawing.SolidBrush ([Drawing.Color]::FromArgb(255, 0x0E, 0x7C, 0x7B))
+    $g.FillPath($teal, $square)
+
+    function IconPt($x, $y) { New-Object Drawing.PointF([float]$x, [float]$y) }   # one point of the 24 x 24 drawing
+    $kidney = New-Object Drawing.Drawing2D.GraphicsPath
+    $kidney.StartFigure()                                 # outline: six curves, the same points as $kidneyPath
+    $kidney.AddBezier((IconPt 13 3),  (IconPt 17.5 3), (IconPt 20 7),    (IconPt 20 12))
+    $kidney.AddBezier((IconPt 20 12), (IconPt 20 17),  (IconPt 17.5 21), (IconPt 13 21))
+    $kidney.AddBezier((IconPt 13 21), (IconPt 9 21),   (IconPt 6 19),    (IconPt 6 16))
+    $kidney.AddBezier((IconPt 6 16),  (IconPt 6 14),   (IconPt 8 13.5),  (IconPt 8 12))
+    $kidney.AddBezier((IconPt 8 12),  (IconPt 8 10.5), (IconPt 6 10),    (IconPt 6 8))
+    $kidney.AddBezier((IconPt 6 8),   (IconPt 6 5),    (IconPt 9 3),     (IconPt 13 3))
+    $kidney.CloseFigure()
+    $kidney.StartFigure(); $kidney.AddLine((IconPt 8 12), (IconPt 11.5 12)); $kidney.AddLine((IconPt 11.5 12), (IconPt 15 8.5))   # calyces
+    $kidney.StartFigure(); $kidney.AddLine((IconPt 11.5 12), (IconPt 16 12))
+    $kidney.StartFigure(); $kidney.AddLine((IconPt 11.5 12), (IconPt 15 15.5))
+    $k = [float]($size * 0.72 / 18)                       # the kidney (18 units tall) fills about 72 % of the square
+    $m = New-Object Drawing.Drawing2D.Matrix
+    $m.Translate([float]($size / 2 - 13 * $k), [float]($size / 2 - 12 * $k))
+    $m.Scale($k, $k)
+    $kidney.Transform($m)
+    $pen = New-Object Drawing.Pen([Drawing.Color]::White, [float][Math]::Max(1.4, $size * 0.072))
+    $pen.StartCap = [Drawing.Drawing2D.LineCap]::Round; $pen.EndCap = [Drawing.Drawing2D.LineCap]::Round
+    $pen.LineJoin = [Drawing.Drawing2D.LineJoin]::Round
+    $g.DrawPath($pen, $kidney)
+    $g.Dispose(); $pen.Dispose(); $teal.Dispose(); $kidney.Dispose(); $square.Dispose()
+
     $ms = New-Object IO.MemoryStream
-    $enc.Save($ms)
+    $bmp.Save($ms, [Drawing.Imaging.ImageFormat]::Png)
+    $bmp.Dispose()
     , $ms.ToArray()
 }
 
