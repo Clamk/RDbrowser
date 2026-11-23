@@ -191,6 +191,7 @@ if ($SourceDir -ne $scriptDir -and (Test-Path -LiteralPath $shared)) {
 
 # ---------------------------------------------------------------- single instance
 $isFirst = $false
+$selfPath = $PSCommandPath   # this script, for Redémarrer
 $mutex = New-Object Threading.Mutex($true, 'Local\RD_Bar_Tray', [ref]$isFirst)
 if (-not $isFirst) { return }
 Read-Config
@@ -1218,13 +1219,19 @@ $null = Add-MenuItem "Ouvrir l'emplacement des dossiers RD" {
 }
 $null = Add-MenuItem 'Ouvrir les fichiers de RD Browser (réglages)' { Open-AppFiles }
 $null = $menu.Items.Add((New-Object Windows.Forms.ToolStripSeparator))
-$null = Add-MenuItem "Quitter (jusqu'à la prochaine connexion)" {
+function Stop-Bar([switch]$Restart) {   # Quitter, or Redémarrer: close this bar, then start a fresh one (which also picks up a new version)
     $S.Quitting = $true
-    if ($hk) { $hk.Dispose() }
+    if ($hk) { $hk.Dispose() }   # frees the keyboard shortcut for the new bar
     $tray.Dispose()
     $window.Close()
+    if ($Restart) {
+        try { $mutex.ReleaseMutex(); $mutex.Dispose() } catch { }   # let the new bar start (only one runs at a time)
+        Start-Process $psExe (Get-RunArgs $selfPath) -WindowStyle Hidden
+    }
     [Windows.Threading.Dispatcher]::CurrentDispatcher.InvokeShutdown()
 }
+$null = Add-MenuItem 'Redémarrer (et appliquer une mise à jour)' { Stop-Bar -Restart }
+$null = Add-MenuItem "Quitter (jusqu'à la prochaine connexion)" { Stop-Bar }
 
 $tray = New-Object Windows.Forms.NotifyIcon
 $tray.Icon = [Drawing.Icon]::FromHandle($bmp.GetHicon())
