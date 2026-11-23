@@ -99,6 +99,7 @@ function Save-AppIco {   # RD_Browser.ico for the Start menu and start-up shortc
 function Update-ShortcutIcons {   # also brings PCs installed before the kidney icon up to date
     try {
         Save-AppIco
+        if (-not (Test-Path -LiteralPath $icoFile)) { return }   # no kidney file: shortcuts keep the icon they have
         $shell = New-Object -ComObject WScript.Shell
         foreach ($path in $shortcuts) {
             if (-not (Test-Path -LiteralPath $path)) { continue }
@@ -149,7 +150,7 @@ if ($Install) {
     foreach ($path in $shortcuts) {
         $sc = $shell.CreateShortcut($path)
         $sc.TargetPath = $psExe; $sc.Arguments = Get-RunArgs $local; $sc.WorkingDirectory = $appDir
-        $sc.WindowStyle = 7; $sc.Hotkey = ''; $sc.IconLocation = "$icoFile,0"
+        $sc.WindowStyle = 7; $sc.Hotkey = ''; $sc.IconLocation = $(if (Test-Path -LiteralPath $icoFile) { "$icoFile,0" } else { "$env:SystemRoot\System32\shell32.dll,3" })
         $sc.Description = 'RD Browser - tapez un numéro de RD, ouvrez son dossier ou son fichier Manip'
         $sc.Save()
     }
@@ -1184,9 +1185,28 @@ Set-Look
 
 # ---------------------------------------------------------------- tray icon and menu
 [Windows.Forms.Application]::EnableVisualStyles()
-# icon: the kidney with calyces, white on the Sarcelle teal (same drawing as RD_Browser.ico)
-$iconStream = [IO.MemoryStream]::new((New-AppIconPng 32))
-$bmp = New-Object Drawing.Bitmap $iconStream
+# icon: the kidney with calyces, white on the Sarcelle teal (same drawing as RD_Browser.ico).
+# If it cannot be drawn on this PC, the former "RD" letters are used, so the bar always has a visible icon.
+try {
+    $iconStream = [IO.MemoryStream]::new((New-AppIconPng 32))
+    $bmp = New-Object Drawing.Bitmap $iconStream
+} catch {
+    $bmp = New-Object Drawing.Bitmap 32, 32
+    $g = [Drawing.Graphics]::FromImage($bmp)
+    $g.SmoothingMode = 'AntiAlias'
+    $g.TextRenderingHint = 'AntiAliasGridFit'
+    $square = New-Object Drawing.Drawing2D.GraphicsPath
+    $square.AddArc(1, 1, 14, 14, 180, 90); $square.AddArc(17, 1, 14, 14, 270, 90)
+    $square.AddArc(17, 17, 14, 14, 0, 90); $square.AddArc(1, 17, 14, 14, 90, 90)
+    $square.CloseFigure()
+    $g.FillPath((New-Object Drawing.SolidBrush ([Drawing.ColorTranslator]::FromHtml('#0E7C7B'))), $square)
+    $fmt = New-Object Drawing.StringFormat
+    $fmt.Alignment = $fmt.LineAlignment = 'Center'
+    $font = New-Object Drawing.Font('Segoe UI', 14, 'Bold', 'Pixel')
+    $g.DrawString('R', $font, [Drawing.Brushes]::White, (New-Object Drawing.RectangleF(1, 1.5, 20, 20)), $fmt)
+    $g.DrawString('D', $font, [Drawing.Brushes]::White, (New-Object Drawing.RectangleF(10.5, 11, 20, 20)), $fmt)
+    $g.Dispose()
+}
 
 $menu = New-Object Windows.Forms.ContextMenuStrip
 function Add-MenuItem($text, $action) { $item = $menu.Items.Add($text); $item.Add_Click($action); $item }
