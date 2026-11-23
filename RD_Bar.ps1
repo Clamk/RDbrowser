@@ -328,7 +328,7 @@ function Register-Hotkey($text) {
 # ---------------------------------------------------------------- window (colours are theme resources set by Set-Theme)
 $window = [Windows.Markup.XamlReader]::Parse(@'
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="RD Browser" Width="680" SizeToContent="Height" WindowStyle="None" AllowsTransparency="True" Background="Transparent"
+        Title="RD Browser" Width="760" SizeToContent="Height" WindowStyle="None" AllowsTransparency="True" Background="Transparent"
         ResizeMode="NoResize" Topmost="True" ShowInTaskbar="False" FontFamily="Segoe UI">
   <Window.Resources>
     <Style x:Key="Ico" TargetType="Path">
@@ -394,21 +394,21 @@ $window = [Windows.Markup.XamlReader]::Parse(@'
             <TextBlock x:Name="RdName" FontSize="15" FontWeight="Bold"/>
             <TextBlock x:Name="RdPath" FontSize="12" Margin="10,0,0,1" VerticalAlignment="Bottom" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource Muted}"/>
           </DockPanel>
-          <!-- Action tiles (Dossier, Manip, ...): one row of buttons for the found folder; greyed when there is nothing to open -->
-          <ItemsControl x:Name="Tiles" Grid.Row="3" Margin="-3,10,-3,0">
-            <ItemsControl.ItemsPanel><ItemsPanelTemplate><UniformGrid Rows="1"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+          <!-- Action pills (Dossier, Manip, ...): one compact row for the found folder; greyed when there is nothing to open -->
+          <ItemsControl x:Name="Tiles" Grid.Row="3" Margin="0,10,0,0">
+            <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
             <ItemsControl.ItemTemplate><DataTemplate>
-              <Border x:Name="B" Margin="3,0" Padding="10,8,8,8" CornerRadius="6" BorderThickness="1" Cursor="Hand" ToolTip="{Binding Tip}"
+              <Border x:Name="B" Height="30" Margin="0,0,5,5" Padding="8,0,6,0" CornerRadius="15" BorderThickness="1" Cursor="Hand" ToolTip="{Binding Tip}"
                       Background="{DynamicResource Box}" BorderBrush="{DynamicResource CardLine}">
-                <StackPanel>
-                  <DockPanel>
-                    <Border x:Name="K" DockPanel.Dock="Right" Style="{StaticResource Kbd}" CornerRadius="3" Padding="4,0">
-                      <TextBlock x:Name="KT" Text="{Binding Hint}" FontSize="10" Foreground="{DynamicResource KbdText}"/>
-                    </Border>
-                    <Path x:Name="P" Style="{StaticResource Ico}" Width="18" Height="18" HorizontalAlignment="Left" Stroke="{DynamicResource Text}" Data="{Binding Geo}"/>
-                  </DockPanel>
-                  <TextBlock x:Name="T" Text="{Binding Text}" Margin="0,7,0,0" FontSize="13" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource Text}"/>
-                  <TextBlock x:Name="S" Text="{Binding Sub}" Margin="0,1,0,0" FontSize="11" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource Muted}"/>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                  <Path x:Name="P" Style="{StaticResource Ico}" Width="14" Height="14" Stroke="{DynamicResource Text}" Data="{Binding Geo}"/>
+                  <TextBlock x:Name="T" Text="{Binding Text}" Margin="5,0,0,1" FontSize="12.5" FontWeight="SemiBold" VerticalAlignment="Center" Foreground="{DynamicResource Text}"/>
+                  <Border x:Name="N" Margin="5,0,0,0" Padding="5,0" CornerRadius="8" VerticalAlignment="Center" Background="{DynamicResource Line}">
+                    <TextBlock Text="{Binding Count}" FontSize="10" Foreground="{DynamicResource Text}"/>
+                  </Border>
+                  <Border x:Name="K" Margin="5,0,0,0" Style="{StaticResource Kbd}" CornerRadius="3" Padding="4,0">
+                    <TextBlock x:Name="KT" Text="{Binding Hint}" FontSize="10" Foreground="{DynamicResource KbdText}"/>
+                  </Border>
                 </StackPanel>
               </Border>
               <DataTemplate.Triggers>
@@ -418,7 +418,6 @@ $window = [Windows.Markup.XamlReader]::Parse(@'
                   <Setter TargetName="B" Property="BorderBrush" Value="{DynamicResource Sel}"/>
                   <Setter TargetName="P" Property="Stroke" Value="{DynamicResource SelText}"/>
                   <Setter TargetName="T" Property="Foreground" Value="{DynamicResource SelText}"/>
-                  <Setter TargetName="S" Property="Foreground" Value="{DynamicResource SelText}"/>
                   <Setter TargetName="K" Property="BorderBrush" Value="{DynamicResource SelKbd}"/>
                   <Setter TargetName="KT" Property="Foreground" Value="{DynamicResource SelText}"/>
                 </DataTrigger>
@@ -427,49 +426,59 @@ $window = [Windows.Markup.XamlReader]::Parse(@'
                   <Setter TargetName="B" Property="Background" Value="Transparent"/>
                   <Setter TargetName="P" Property="Stroke" Value="{DynamicResource Dim}"/>
                   <Setter TargetName="T" Property="Foreground" Value="{DynamicResource Dim}"/>
-                  <Setter TargetName="S" Property="Foreground" Value="{DynamicResource Dim}"/>
+                  <Setter TargetName="KT" Property="Foreground" Value="{DynamicResource Dim}"/>
                 </DataTrigger>
+                <DataTrigger Binding="{Binding Count}" Value=""><Setter TargetName="N" Property="Visibility" Value="Collapsed"/></DataTrigger>
                 <DataTrigger Binding="{Binding Hint}" Value=""><Setter TargetName="K" Property="Visibility" Value="Collapsed"/></DataTrigger>
               </DataTemplate.Triggers>
             </DataTemplate></ItemsControl.ItemTemplate>
           </ItemsControl>
-          <ItemsControl x:Name="Rows" Grid.Row="4" Margin="0,8,0,0">
-            <ItemsControl.ItemsPanel><ItemsPanelTemplate><UniformGrid Columns="1"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
-            <ItemsControl.ItemTemplate><DataTemplate>
-              <Border x:Name="R" Height="42" Margin="0,2" Padding="12,0" CornerRadius="6" Background="Transparent" Cursor="Hand">
+          <!-- White panel: a title line with a count, then the folder's other files (or a list to choose from) -->
+          <Border x:Name="ListPanel" Grid.Row="4" Margin="0,7,0,0" Padding="4,4,4,6" VerticalAlignment="Top" CornerRadius="7" BorderThickness="1"
+                  Background="{DynamicResource Box}" BorderBrush="{DynamicResource CardLine}">
+            <DockPanel>
+              <Border DockPanel.Dock="Top" Margin="0,0,0,3" Padding="10,6" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource Line}">
                 <DockPanel>
-                  <Path x:Name="P" Style="{StaticResource Ico}" Width="18" Height="18" Margin="0,0,12,0" Stroke="{DynamicResource Text}" Data="{Binding Geo}"/>
-                  <Border x:Name="K" DockPanel.Dock="Right" Style="{StaticResource Kbd}">
-                    <TextBlock x:Name="KT" Text="{Binding Hint}" FontSize="11" Foreground="{DynamicResource KbdText}"/>
-                  </Border>
-                  <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock x:Name="T" Text="{Binding Text}" FontSize="14" Foreground="{DynamicResource Text}"/>
-                    <TextBlock x:Name="S" Text="{Binding Sub}" FontSize="12" Margin="8,0,0,0" VerticalAlignment="Center" Foreground="{DynamicResource Muted}"/>
-                  </StackPanel>
+                  <TextBlock x:Name="PanelCount" DockPanel.Dock="Right" FontSize="11.5" FontWeight="SemiBold" Foreground="{DynamicResource Muted}"/>
+                  <TextBlock x:Name="PanelTitle" FontSize="11.5" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource Muted}"/>
                 </DockPanel>
               </Border>
-              <DataTemplate.Triggers>
-                <Trigger SourceName="R" Property="IsMouseOver" Value="True"><Setter TargetName="R" Property="Background" Value="{DynamicResource Hover}"/></Trigger>
-                <DataTrigger Binding="{Binding Sel}" Value="True">
-                  <Setter TargetName="R" Property="Background" Value="{DynamicResource Sel}"/>
-                  <Setter TargetName="P" Property="Stroke" Value="{DynamicResource SelText}"/>
-                  <Setter TargetName="T" Property="Foreground" Value="{DynamicResource SelText}"/>
-                  <Setter TargetName="T" Property="FontWeight" Value="SemiBold"/>
-                  <Setter TargetName="S" Property="Foreground" Value="{DynamicResource SelText}"/>
-                  <Setter TargetName="S" Property="Opacity" Value="0.82"/>
-                  <Setter TargetName="K" Property="BorderBrush" Value="{DynamicResource SelKbd}"/>
-                  <Setter TargetName="KT" Property="Foreground" Value="{DynamicResource SelText}"/>
-                </DataTrigger>
-                <DataTrigger Binding="{Binding On}" Value="False">
-                  <Setter TargetName="R" Property="Cursor" Value="Arrow"/>
-                  <Setter TargetName="R" Property="Background" Value="Transparent"/>
-                  <Setter TargetName="P" Property="Stroke" Value="{DynamicResource Dim}"/>
-                  <Setter TargetName="T" Property="Foreground" Value="{DynamicResource Dim}"/>
-                </DataTrigger>
-                <DataTrigger Binding="{Binding Hint}" Value=""><Setter TargetName="K" Property="Visibility" Value="Collapsed"/></DataTrigger>
-              </DataTemplate.Triggers>
-            </DataTemplate></ItemsControl.ItemTemplate>
-          </ItemsControl>
+              <ItemsControl x:Name="Rows">
+                <ItemsControl.ItemTemplate><DataTemplate>
+                  <Border x:Name="R" Height="32" Margin="0,1,0,0" Padding="10,0" CornerRadius="5" Background="Transparent" Cursor="Hand">
+                    <DockPanel>
+                      <Path x:Name="P" Style="{StaticResource Ico}" Width="16" Height="16" Margin="0,0,10,0" Stroke="{DynamicResource Text}" Data="{Binding Geo}"/>
+                      <Border x:Name="K" DockPanel.Dock="Right" Margin="8,0,0,0" Style="{StaticResource Kbd}">
+                        <TextBlock x:Name="KT" Text="{Binding Hint}" FontSize="11" Foreground="{DynamicResource KbdText}"/>
+                      </Border>
+                      <TextBlock x:Name="S" DockPanel.Dock="Right" Text="{Binding Sub}" FontSize="12" Margin="10,0,0,0" VerticalAlignment="Center" Foreground="{DynamicResource Muted}"/>
+                      <TextBlock x:Name="T" Text="{Binding Text}" FontSize="13.5" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource Text}"/>
+                    </DockPanel>
+                  </Border>
+                  <DataTemplate.Triggers>
+                    <Trigger SourceName="R" Property="IsMouseOver" Value="True"><Setter TargetName="R" Property="Background" Value="{DynamicResource Hover}"/></Trigger>
+                    <DataTrigger Binding="{Binding Sel}" Value="True">
+                      <Setter TargetName="R" Property="Background" Value="{DynamicResource Sel}"/>
+                      <Setter TargetName="P" Property="Stroke" Value="{DynamicResource SelText}"/>
+                      <Setter TargetName="T" Property="Foreground" Value="{DynamicResource SelText}"/>
+                      <Setter TargetName="T" Property="FontWeight" Value="SemiBold"/>
+                      <Setter TargetName="S" Property="Foreground" Value="{DynamicResource SelText}"/>
+                      <Setter TargetName="S" Property="Opacity" Value="0.82"/>
+                      <Setter TargetName="K" Property="BorderBrush" Value="{DynamicResource SelKbd}"/>
+                      <Setter TargetName="KT" Property="Foreground" Value="{DynamicResource SelText}"/>
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding On}" Value="False">
+                      <Setter TargetName="R" Property="Cursor" Value="Arrow"/>
+                      <Setter TargetName="R" Property="Background" Value="Transparent"/>
+                      <Setter TargetName="P" Property="Stroke" Value="{DynamicResource Dim}"/>
+                      <Setter TargetName="T" Property="Foreground" Value="{DynamicResource Dim}"/>
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding Hint}" Value=""><Setter TargetName="K" Property="Visibility" Value="Collapsed"/></DataTrigger>
+                  </DataTemplate.Triggers>
+                </DataTemplate></ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </DockPanel>
+          </Border>
         </Grid>
 
         <!-- Links rail: quick links and Mes liens (stops at the footer; the colour picker opens just above it) -->
@@ -534,7 +543,7 @@ $window = [Windows.Markup.XamlReader]::Parse(@'
   </Grid>
 </Window>
 '@)
-foreach ($n in 'Box', 'Header', 'RdName', 'RdPath', 'Message', 'Tiles', 'Rows', 'Links', 'LinksTitle', 'MyLinks', 'AddLink', 'ThemeBtn', 'ThemeIco', 'KeyBtn', 'Cog',
+foreach ($n in 'Box', 'Header', 'RdName', 'RdPath', 'Message', 'Tiles', 'ListPanel', 'PanelTitle', 'PanelCount', 'Rows', 'Links', 'LinksTitle', 'MyLinks', 'AddLink', 'ThemeBtn', 'ThemeIco', 'KeyBtn', 'Cog',
               'PaletteBtn', 'Picker', 'Swatches', 'SchemeName') {
     Set-Variable $n $window.FindName($n)
 }
@@ -660,6 +669,12 @@ function Get-Live {
     if ($S.Folder -and $S.Files.Count) { 0..($S.Files.Count - 1) }   # the folder's files
 }
 
+function Set-Panel($title, $count) {   # the white list panel: hidden when there is nothing to list
+    $ListPanel.Visibility = if ($title) { 'Visible' } else { 'Collapsed' }
+    $PanelTitle.Text = $title
+    $PanelCount.Text = "$count"
+}
+
 function New-Row($i, $geo, $text, $sub, $on, $key) {
     $sel = $on -and $i -eq $S.Sel
     [pscustomobject]@{ I = $i; Geo = $geo; Text = $text; Sub = $sub; On = [bool]$on; Sel = [bool]$sel; Hint = $(if ($sel) { 'Entrée' } else { $key }) }
@@ -683,11 +698,13 @@ function Render {
             Set-Message $(if ($S.PickTotal -gt $n) { "$($S.PickTotal) dossiers trouvés pour $($S.Rd) - les $n premiers ici. Ajoutez le numéro pour les autres (ex. $($S.Rd)45)$where" }
                           else { "$n dossiers trouvés pour $($S.Rd) - choisissez-en un$where" })
             $Rows.ItemsSource = @(for ($i = $first; $i -le $last; $i++) { New-Row $i $icons.folder $S.Pick[$i].Name $S.Pick[$i].Enterprise $true '' })
+            Set-Panel "Dossiers trouvés pour $($S.Rd)" $(if ($S.PickTotal -gt $n) { "$n sur $($S.PickTotal)" } else { $n })
         } else {
             Set-Message "$n fichiers $($S.PickLabel) trouvés - choisissez-en un (Échap pour revenir)$where"
             $Rows.ItemsSource = @(for ($i = $first; $i -le $last; $i++) {
                 New-Row $i $icons[(Get-FileIcon $S.Pick[$i].Extension)] $S.Pick[$i].Name $S.Pick[$i].LastWriteTime.ToString('yyyy-MM-dd HH:mm') $true ''
             })
+            Set-Panel "Fichiers $($S.PickLabel)" $n
         }
         return
     }
@@ -708,6 +725,7 @@ function Render {
     if ($S.FolderPick) { Set-Message (@('Échap pour revenir à la liste des dossiers', $where) -ne '' -join ' · ') }
     elseif ($S.Folder) { Set-Message $(if ($S.Files.Count) { $where } elseif (@($S.Matches.Values | Where-Object { $_.Count }).Count) { 'Pas d''autre fichier à la racine de ce dossier' } else { 'Aucun fichier à la racine de ce dossier' }) }
     $Rows.ItemsSource = $shown
+    Set-Panel $(if ($all.Count) { 'Autres fichiers du dossier' } else { '' }) $all.Count
 }
 
 function Build-Tiles([bool]$hidden) {   # one tile per set-up button; Entrée opens the folder while no file is highlighted
@@ -715,7 +733,8 @@ function Build-Tiles([bool]$hidden) {   # one tile per set-up button; Entrée op
     $Tiles.ItemsSource = @(for ($i = 0; $i -lt $buttons.Count; $i++) {
         $b = $buttons[$i]; $m = @($S.Matches[$i])
         if ($b.Type -notin 'folder', 'file') { continue }   # buttons of any other type are not set up yet: hidden
-        $key = if ($b.Shortcut) { "Ctrl+$("$($b.Shortcut)".ToUpper())" } else { "Ctrl+$($i + 1)" }
+        $letter = if ($b.Shortcut) { "$($b.Shortcut)".ToUpper() } else { "$($i + 1)" }
+        $key = "Ctrl+$letter"
         if ($b.Type -eq 'folder') {
             $on = [bool]$S.Folder
             $sel = $on -and $S.Sel -lt 0 -and -not $S.Pick
@@ -729,8 +748,10 @@ function Build-Tiles([bool]$hidden) {   # one tile per set-up button; Entrée op
             $sub = if (-not $S.Folder) { '' } elseif ($m.Count -gt 1) { "$($m.Count) fichiers" } elseif ($m.Count) { $m[0].Name } else { 'aucun fichier' }
             $tip = "Ouvrir le fichier $($b.Label) (nom contenant « $($b.Pattern) »)"
         }
+        $tip = $(if ($sub) { "$sub · " }) + $tip + " ($(if ($sel) { 'Entrée ou ' })$key)"   # the file name lives in the tooltip
         [pscustomobject]@{ I = $i; Geo = $geo; Text = $b.Label; Sub = $sub; Tip = $tip; On = [bool]$on; Sel = [bool]$sel
-                           Hint = $(if ($sel) { 'Entrée' } else { $key }) }
+                           Count = $(if ($S.Folder -and $m.Count -gt 1) { "$($m.Count)" } else { '' })
+                           Hint = $(if ($sel) { '↵' } else { $letter }) }
     })
 }
 
