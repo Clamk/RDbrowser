@@ -1,0 +1,87 @@
+﻿AIDE DES RÉGLAGES - RD Browser
+==============================
+
+Les réglages sont dans RD_Browser.config.json (même dossier). Ce fichier-ci ne contient que les explications.
+Ouvrir les réglages : bouton engrenage en bas de la barre, puis ouvrir RD_Browser.config.json avec le Bloc-notes.
+Les modifications sont prises en compte à la prochaine ouverture de la barre (sauf Hotkey : au prochain démarrage).
+
+
+RÈGLES D'ÉCRITURE (à respecter partout)
+---------------------------------------
+- Chaque barre oblique inverse \ se tape deux fois : \\serveur\partage devient "\\\\serveur\\partage".
+- Le texte est toujours entre guillemets droits : "comme ceci".
+- Dans une liste, une virgule après chaque ligne, sauf la dernière.
+- Enregistrer avec Fichier > Enregistrer sous > Codage : UTF-8.
+- Si la barre ne montre plus vos liens après une modification, c'est qu'une de ces règles n'est pas respectée.
+
+
+RDPath - où sont les dossiers RD
+--------------------------------
+Le dossier qui contient RD001, RD002, etc.
+  ".."                              = le dossier juste au-dessus du dossier RD Browser
+  "\\\\serveur\\partage\\RD"        = un chemin complet
+Dans la barre : tapez un numéro (7, 07, RD7, RD007).
+
+
+ClientPath - où sont les dossiers des clients (facultatif)
+----------------------------------------------------------
+Un dossier par client (entreprise), et dans chacun des dossiers projet dont le nom contient un code :
+quelques lettres puis un numéro.
+  Exemple : "\\\\serveur\\partage\\Clients"  ->  Alpha Pharma\ALP002 Stabilité
+Laissez "" (rien entre les guillemets) pour ne pas utiliser ce second endroit.
+Dans la barre :
+  ALP2, alp 002, ALP002  ->  le projet ALP002 (les zéros ne comptent pas)
+  AL, ALP                ->  la liste des projets dont le code commence ainsi (Haut/Bas puis Entrée)
+  7, RD007               ->  toujours les dossiers RD
+La liste des projets est relue en arrière-plan : un dossier tout juste créé apparaît dans la minute.
+
+
+Hotkey - le raccourci qui ouvre la barre
+----------------------------------------
+Le raccourci par défaut pour tout le monde, par exemple "Ctrl+Alt+F".
+Chacun peut le changer pour son propre PC avec le bouton clavier, en bas de la colonne de droite de la barre.
+
+
+QuickLinks - les liens rapides (partagés, pour tout le monde)
+-------------------------------------------------------------
+Les 6 liens en haut de la colonne de droite. Ils ouvrent toujours le même endroit, quel que soit le dossier cherché.
+Clavier : Alt+1 à Alt+6.
+  Name : le texte affiché. Restez court (environ 12 caractères).
+  Path : ce que le lien ouvre - un dossier, un fichier ou une adresse web.
+           dossier : "D:\\Projets\\Modeles"
+           réseau  : "\\\\serveur\\partage\\Documents"
+           fichier : "\\\\serveur\\partage\\Stocks\\Stock.xlsx"
+           web     : "https://intranet.exemple.fr"
+         Path vide ("") : le lien reste caché.
+  Icon : (facultatif) dossier, document, tableau, carton, calculatrice, web, rein, cellule,
+         horloge, calendrier, fiole, microscope, thermometre, congelateur, pipette,
+         tube, seringue, planning, liste ou equipe.
+         Sans Icon : un globe pour les adresses web, un dossier pour le reste.
+Exemple :
+  { "Name": "Stocks", "Path": "\\\\serveur\\partage\\Stocks\\Stock.xlsx", "Icon": "tableau" },
+
+Les liens personnels ("Mes liens", en dessous) ne sont pas ici : chacun les gère depuis la barre
+(Ajouter un lien ; clic droit pour renommer, déplacer, supprimer). Ils sont enregistrés sur son propre PC.
+
+
+Buttons - les tuiles d'action
+-----------------------------
+La rangée de tuiles au-dessus de la liste des fichiers, quand un dossier (RD ou projet) est trouvé.
+  Label      : le nom affiché sur la tuile.
+  Type       : "folder" = ouvre le dossier trouvé.
+               "file"   = ouvre un fichier du dossier dont le nom contient Pattern.
+               "none"   = pas encore configuré, tuile non affichée.
+  Pattern    : (type file) un mot du nom de fichier. Majuscules, espaces, _ et - ne comptent pas :
+               "rapport final" trouve aussi Rapport_Final et RapportFinal.
+  Extensions : (type file) les types de fichier acceptés, par exemple [".docx", ".pdf"].
+               Plusieurs fichiers trouvés : la tuile propose de choisir.
+  Shortcut   : (facultatif) une lettre pour le raccourci Ctrl+lettre.
+Exemple :
+  { "Label": "Manip", "Type": "file", "Pattern": "manip", "Extensions": [".xlsx", ".xlsm", ".xls"], "Shortcut": "M" },
+
+
+VÉRIFIER UN CHEMIN
+------------------
+Copier le chemin exact : Maj + clic droit sur le fichier ou dossier > Copier en tant que chemin d'accès.
+Le tester : Windows+R, coller (avec des \ simples), Entrée. S'il s'ouvre, le chemin est bon.
+Puis doubler chaque \ en le mettant dans les réglages.
